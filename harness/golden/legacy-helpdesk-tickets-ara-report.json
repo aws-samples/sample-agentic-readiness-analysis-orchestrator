@@ -1,50 +1,51 @@
 {
   "repo_name": "legacy-helpdesk-tickets",
-  "analysis_type": "ara",
   "metadata": {
-    "analysis_date": "2026-08-21",
-    "analyzed_by": "AWS Transform Custom — Agentic Readiness Analysis",
+    "analysis_type": "ara",
+    "analysis_date": "2026-10-13",
     "td_version": "agentic-readiness-analysis",
+    "portfolio_name": "ARA",
+    "language": "Python 2.7",
+    "loc": 76,
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Application source code (Python/Django) with database connection and HTTP endpoints present. Single deployable service with entry points via Django views.",
-    "service_archetype": "stateful-crud",
+    "repo_type_justification": "Application source with an HTTP request-handling entry point is present (tickets/views.py Django views plus helpdesk/settings.py with ROOT_URLCONF and INSTALLED_APPS), deployed as a running service on Apache + mod_wsgi per README.md. No library packaging manifest and no resource-provisioning IaC, so library, infrastructure-only, and deployment-config do not apply.",
+    "service_archetype": "data-gateway",
     "service_archetype_source": "auto-detected",
-    "archetype_justification": "PostgreSQL database with CRUD operations on ticket entities. Django admin installed for entity lifecycle management. User-specific data (requester field).",
-    "agent_scope": "write-enabled",
+    "archetype_justification": "The service owns persistent state in PostgreSQL and both of its endpoints are read queries over that store with filtering (status filter and subject LIKE search) and minimal business logic, which matches the data-gateway branch of the detection tree. No message consumers, no downstream service fan-out, and no write endpoints were found.",
+    "agent_scope": "read-only",
     "agent_scope_source": "inferred",
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_http_rpc_surface": true,
       "has_auth_surface": true,
-      "has_write_operations": true,
+      "has_write_operations": false,
       "has_logging_of_user_data": true
     },
     "tech_stack": {
       "language": "Python 2.7",
-      "loc": 55,
-      "framework": "Django 1.4",
-      "architecture": "Monolithic (single EC2)"
-    },
-    "portfolio_name": "legacy-helpdesk-tickets"
+      "loc": 76,
+      "framework": "Django 1.4 (server-rendered views, no REST layer)",
+      "architecture": "Monolithic Django app on a single EC2 instance (Apache 2.2 + mod_wsgi) with co-located PostgreSQL 9.1"
+    }
   },
   "classification": {
-    "tier": "Not Agent-Integrable",
+    "tier": "Remediation Required",
     "sub_qualifier": null,
-    "blocker_count": 7,
-    "risk_safety_count": 12,
-    "risk_quality_count": 15,
-    "info_count": 5,
-    "high_count": 7,
-    "medium_count": 27,
-    "low_count": 5,
-    "rule_matched": "≥3 BLOCKER → Not Agent-Integrable"
+    "blocker_count": 2,
+    "risk_safety_count": 11,
+    "risk_quality_count": 14,
+    "info_count": 8,
+    "high_count": 13,
+    "medium_count": 14,
+    "low_count": 8,
+    "rule_matched": "1-2 BLOCKER \u2192 Remediation Required"
   },
   "counts": {
-    "total": 39,
-    "high": 7,
-    "medium": 27,
-    "low": 5
+    "total": 35,
+    "high": 13,
+    "medium": 14,
+    "low": 8
   },
   "findings": [
     {
@@ -52,21 +53,30 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Documented API Interface",
-      "description": "The application exposes Django views serving HTML responses via raw SQL. No REST, GraphQL, or AsyncAPI interface exists. Integration requires reverse-engineering HTML views or direct database access.",
-      "gap": "No API layer exists. Views return HTML via render_to_response and raw HttpResponse. No JSON endpoints, no API documentation.",
-      "recommendation": "Create a REST API layer (Django REST Framework or FastAPI) that exposes ticket operations as JSON endpoints with documented contracts. Requires Python/Django upgrade first.",
+      "title": "Documented API Interface",
+      "description": "The repository exposes only server-rendered Django 1.4 views. `tickets/views.py` defines two function views: `ticket_list` returns an HTML template render (`render_to_response('tickets/list.html', ...)`) and `ticket_search` returns a hand-concatenated HTML `<ul>` string via `HttpResponse`. Searched for REST/GraphQL/AsyncAPI surfaces across all 4 repository files: no DRF (`rest_framework`) in `INSTALLED_APPS` in helpdesk/settings.py, no `@api_view`/serializers, no GraphQL schema files (`.graphql`/`.gql`), no AsyncAPI or Smithy models, no dependency manifest declaring an API framework.",
+      "gap": "There is no machine-consumable API. An agent integrating with this system today would have to scrape HTML or connect directly to PostgreSQL ('helpdesk' database, 127.0.0.1:5432 per helpdesk/settings.py) \u2014 both brittle, unauditable coupling patterns.",
+      "recommendation": "Introduce a versioned JSON API in front of the ticket data (e.g., Django REST Framework `/api/v1/tickets` with list/detail endpoints) as the single agent integration surface, and keep the HTML views as a separate presentation layer. Do not expose the database directly to agents.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "tickets/views.py",
-        "lines": "1-27"
+        "lines": "1-29"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
-        "safety_impact": true
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Add a read-only JSON endpoint for tickets (list + detail) returning explicit field projections, served under /api/v1/.",
+          "target_state": "All agent access flows through a documented, versioned JSON API; no HTML scraping and no direct database connectivity for agent callers.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "AUTH-Q1",
+            "DATA-Q4"
+          ]
+        }
       }
     },
     {
@@ -74,21 +84,26 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Machine-Readable API Specification",
-      "description": "No OpenAPI, AsyncAPI, GraphQL schema, or machine-readable API specification exists in the repository.",
-      "gap": "Agent tool generation requires fully manual authoring with no spec to validate against.",
-      "recommendation": "Create an OpenAPI specification documenting all endpoints. Preferably auto-generated from API framework annotations.",
+      "title": "Machine-Readable API Specification",
+      "description": "No machine-readable API specification exists. Searched for `openapi.*`, `swagger.*`, `*.graphql`, `*.gql`, `*.smithy`, and AsyncAPI documents across the repository (4 files total: .gitignore, README.md, helpdesk/settings.py, tickets/views.py) \u2014 zero results. No spec-generating dependency is declared (no dependency manifest is present at all; README.md states pip requirements are pinned to versions no longer on PyPI mirrors).",
+      "gap": "Agent tool definitions would have to be authored by hand against HTML-rendering views and would drift from implementation immediately.",
+      "recommendation": "Once the JSON API from API-Q1 exists, generate an OpenAPI 3 document from code annotations (e.g., drf-spectacular) and publish it in the repository and at a served `/api/schema` path.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "tickets/views.py",
+        "file": "README.md",
         "lines": null
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": [
+          "Hand-author and version-control a tool schema for the two read views until a generated spec exists.",
+          "Pin the agent to a single wrapper service that owns the schema."
+        ]
       }
     },
     {
@@ -96,21 +111,26 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Structured Error Responses",
-      "description": "No structured error responses. DEBUG = True returns full HTML stack traces. No error codes, no machine-readable error format.",
-      "gap": "Agents cannot distinguish retriable from terminal errors. No structured error format exists.",
-      "recommendation": "Implement consistent JSON error response format with error code, message, and retryable indicator across all endpoints.",
+      "title": "Structured Error Responses",
+      "description": "Responses carry no structured error contract. `ticket_search` builds an HTML string and returns `HttpResponse(out)`; `ticket_list` renders a template. Neither view has try/except handling, and `DEBUG = True` in helpdesk/settings.py means unhandled exceptions return full Django HTML stack traces instead of machine-readable errors. No error-code enum, error body schema, or retryable indicator exists anywhere in tickets/views.py.",
+      "gap": "An agent cannot distinguish retriable failures (database unavailable) from terminal ones (bad input). A failed call returns an HTML traceback page with HTTP 500.",
+      "recommendation": "Define a JSON error envelope (`code`, `message`, `retryable`) applied by a single exception handler on the new API layer, and set `DEBUG = False` so tracebacks are never emitted to callers.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "helpdesk/settings.py",
-        "lines": "6"
+        "file": "tickets/views.py",
+        "lines": "7-29"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Treat all non-200 responses as terminal in agent orchestration until structured errors exist.",
+          "Place an API gateway in front that normalizes error shapes."
+        ]
       }
     },
     {
@@ -118,24 +138,24 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Idempotent Write Operations",
-      "description": "No idempotency mechanisms exist. No idempotency keys, no unique constraint enforcement on business keys. Django admin provides write operations without idempotency guarantees.",
-      "gap": "Write operations vulnerable to duplication on agent retry. No idempotency key support.",
-      "recommendation": "Implement idempotency keys on all write endpoints once a proper API layer exists.",
-      "severity": "High",
+      "title": "Idempotent Write Operations",
+      "description": "No write endpoints exist in the repository. Both views in tickets/views.py execute `SELECT` statements only; there are no POST/PUT/PATCH/DELETE handlers, no form processing, and no idempotency-key handling. Idempotency is therefore informational for the current read-only surface.",
+      "gap": "No idempotency mechanism exists, so any future write endpoint (ticket create/update, which the ticketing domain clearly requires) would start without retry safety.",
+      "recommendation": "When write endpoints are added, require an `Idempotency-Key` header persisted with a unique constraint, and enforce unique business keys at the PostgreSQL layer.",
+      "severity": "Low",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "tickets/views.py",
-        "lines": null
+        "lines": "7-29"
       },
       "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no idempotency mechanisms exist",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "The system exposes write operations via Django admin and is a CRUD ticketing app. No idempotency keys or unique business key enforcement exists."
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only, so write idempotency is not a deployment gate.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "has_write_operations=false (tickets/views.py contains only SELECT-backed GET views), so agent_scope was inferred as read-only and API-Q4 evaluates as INFO."
       }
     },
     {
@@ -143,39 +163,17 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "HTML Response Format",
-      "description": "API responses are HTML — render_to_response templates and raw HTML strings. No JSON serialization or structured response format.",
-      "gap": "LLMs cannot consume HTML responses effectively. Any agent integration requires HTML-to-data parsing or response format rewrite.",
-      "recommendation": "Migrate to JSON responses for all agent-facing endpoints.",
+      "title": "Structured Response Format",
+      "description": "The response format is HTML, not structured data. `ticket_list` renders `tickets/list.html`; `ticket_search` concatenates `<li>#%d %s</li>` fragments into an HTML string. No JSON serialization, no content-type negotiation, and no protobuf/XML marshaling were found.",
+      "gap": "LLM-based agents would need to parse presentation HTML, which breaks whenever the template or markup changes.",
+      "recommendation": "Return `application/json` with stable field names from the new API layer; keep HTML strictly for the browser UI.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Medium",
       "phase": 3,
       "evidence": {
         "file": "tickets/views.py",
-        "lines": "13-27"
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "API-Q7",
-      "category": "API Surface",
-      "category_display": "API & Tooling",
-      "category_id": "API",
-      "title": "No Event Emission for State Changes",
-      "description": "No event emission capability. No webhooks, no SNS/EventBridge/SQS integration, no Kafka, no CDC pipelines.",
-      "gap": "Agents cannot react to ticket state changes without polling.",
-      "recommendation": "Implement SNS/EventBridge notifications on ticket status changes for event-driven agent integration.",
-      "severity": "Low",
-      "priority": "P3",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "helpdesk/settings.py",
-        "lines": null
+        "lines": "15-29"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -187,17 +185,17 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Rate Limit Documentation or Headers",
-      "description": "No rate limit documentation and no rate limit response headers. No API Gateway usage plans.",
-      "gap": "Agents cannot self-throttle. Undocumented limits cause unpredictable failures.",
-      "recommendation": "Document rate limits and implement rate limit response headers once a proper API layer exists.",
+      "title": "Rate Limit Documentation and Headers",
+      "description": "No rate limiting or rate-limit signaling exists. Searched helpdesk/settings.py MIDDLEWARE_CLASSES (CommonMiddleware, SessionMiddleware, AuthenticationMiddleware only) and the full view module for throttling middleware or `X-RateLimit-*`/`Retry-After` headers; none present. README.md describes Apache 2.2 + mod_wsgi on a single EC2 instance with no gateway or WAF in front.",
+      "gap": "Agents cannot self-throttle because no limits are documented or advertised in responses.",
+      "recommendation": "Document a request budget for agent callers and emit `X-RateLimit-Remaining` and `Retry-After` from the throttling layer added for STATE-Q5.",
       "severity": "Low",
       "priority": "P3",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 3,
       "evidence": {
         "file": "helpdesk/settings.py",
-        "lines": null
+        "lines": "28-32"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -209,21 +207,29 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Machine Identity Authentication",
-      "description": "Session-based Django auth only. No OAuth2 client credentials, no API keys with principal attribution, no mTLS, no service accounts.",
-      "gap": "Agents cannot authenticate without human credentials (username/password session login).",
-      "recommendation": "Implement OAuth2 client credentials flow or API key authentication with per-agent principal attribution.",
+      "title": "Machine Identity Authentication",
+      "description": "Only human session authentication is configured. helpdesk/settings.py installs `django.contrib.auth`, `django.contrib.sessions` and `AuthenticationMiddleware` \u2014 cookie/session based login for people. Searched all files for OAuth2 client-credentials flows, API-key authentication with principal attribution, mTLS configuration, service-account definitions, Cognito app clients, and gateway authorizers: none found. Neither view in tickets/views.py reads `request.user` or any caller identity.",
+      "gap": "There is no machine identity an agent could use, and no mechanism to attribute a call to a specific non-human principal. Every downstream authorization and audit decision (AUTH-Q2, AUTH-Q3, AUTH-Q6) is therefore unenforceable.",
+      "recommendation": "Introduce a machine-identity path for the new API layer: OAuth 2.0 client credentials (or per-agent API keys issued from a managed store) where each agent gets a distinct principal ID that is carried into request context and logs.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "helpdesk/settings.py",
-        "lines": "27-31"
+        "lines": "27-39"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
-        "safety_impact": true
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Stand up client-credentials or per-agent API-key authentication for /api/v1 and reject unauthenticated calls.",
+          "target_state": "Every agent call carries a unique, revocable machine principal that is attributable in logs and usable for authorization decisions.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "API-Q1"
+          ]
+        }
       }
     },
     {
@@ -231,21 +237,26 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Scoped Permissions",
-      "description": "Django built-in auth provides only basic user/superuser differentiation. No fine-grained RBAC, no per-resource permission scoping.",
-      "gap": "No mechanism to grant an agent read-only access to specific resources without inheriting broader privileges.",
-      "recommendation": "Implement permission framework with per-resource scoping or deploy API Gateway with resource-level policies.",
-      "severity": "Medium",
+      "title": "Scoped Permissions (Least Privilege)",
+      "description": "No authorization scoping exists. `ticket_list` and `ticket_search` in tickets/views.py have no `@login_required`, no permission decorator, and no permission check in the body \u2014 they execute raw SQL for any caller that can reach the URL. helpdesk/settings.py installs `django.contrib.auth` (which provides a permission model) and `django.contrib.admin`, but no group, permission, or per-caller scope is defined anywhere in the repository, and no IaC/IAM policies exist to scope access at the platform layer.",
+      "gap": "All authorization is effectively coarse-grained: any caller reaching the endpoint receives the full ticket result set, so an agent identity cannot be granted a narrowed slice.",
+      "recommendation": "Define Django permissions/groups (or API-key scopes) for ticket read access and enforce them in the API layer, granting agent principals only the minimum ticket fields and rows required.",
+      "severity": "High",
       "priority": "P1",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "helpdesk/settings.py",
-        "lines": null
+        "file": "tickets/views.py",
+        "lines": "7-29"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Restrict network reachability of the endpoint to a single agent gateway host.",
+          "Place an authorizing proxy in front that enforces per-principal scopes before traffic reaches Django."
+        ]
       }
     },
     {
@@ -253,21 +264,26 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Action-Level Authorization",
-      "description": "No action-level authorization. Views perform no permission checks — any authenticated user can execute any operation.",
-      "gap": "Cannot enforce read-only vs write access per resource type for agents.",
-      "recommendation": "Add action-level permission checks to all views/endpoints.",
-      "severity": "Medium",
+      "title": "Action-Level Authorization",
+      "description": "No action-level authorization is implemented. There are no `canRead`/`canWrite`/`canDelete` style checks, no ABAC/RBAC matrix, and no method-level gating in tickets/views.py; Django's default admin (django.contrib.admin in helpdesk/settings.py) grants full model access to staff users without any agent-specific differentiation.",
+      "gap": "The system cannot express 'read tickets but never delete them' for an agent principal \u2014 a prerequisite for any mixed read/write agent workflow.",
+      "recommendation": "Implement per-action permission checks (`tickets.view_ticket`, `tickets.change_ticket`, `tickets.delete_ticket`) enforced in the API layer and assign only view permissions to agent principals.",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "tickets/views.py",
-        "lines": "7-27"
+        "file": "helpdesk/settings.py",
+        "lines": "33-40"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Expose only read endpoints to the agent and keep write URLs unrouted on the agent-facing host.",
+          "Enforce HTTP-method allowlisting at the reverse proxy."
+        ]
       }
     },
     {
@@ -275,21 +291,21 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Identity Propagation",
-      "description": "No identity propagation mechanism. No JWT parsing, no OAuth2 on-behalf-of flows, no token exchange.",
-      "gap": "Cannot distinguish agent-as-self from agent-on-behalf-of-user.",
-      "recommendation": "Implement JWT-based identity propagation with distinct flows for service-to-service and user-delegated calls.",
-      "severity": "Medium",
+      "title": "Identity Propagation and Delegation",
+      "description": "No identity propagation exists. The views never read `request.user`, no JWT/OAuth token parsing is configured in MIDDLEWARE_CLASSES, and no `X-User-Id`-style context is forwarded. The only outbound dependency configured is SMTP to `exchange.acme-corp.internal` (helpdesk/settings.py), which carries no caller identity.",
+      "gap": "The system cannot distinguish an agent acting as itself from an agent acting on behalf of a specific helpdesk user. Calibrated to INFO for the `data-gateway` archetype, where the surface is a read-only query layer.",
+      "recommendation": "If on-behalf-of workflows are planned, add token-based identity propagation and record both the actor (agent) and subject (user) on each request.",
+      "severity": "Low",
       "priority": "P2",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "helpdesk/settings.py",
-        "lines": "27-31"
+        "lines": "28-32"
       },
       "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "native_severity": "INFO",
+        "safety_impact": false
       }
     },
     {
@@ -297,22 +313,26 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "Hardcoded Credentials in Source Code",
-      "description": "SECRET_KEY and database password are hardcoded in settings.py committed to git. No secrets management system, no rotation.",
-      "gap": "Credentials in source code are exposed to anyone with repository access and persist in git history.",
-      "recommendation": "Remove all hardcoded credentials. Migrate to AWS Secrets Manager with rotation policies.",
-      "severity": "Medium",
+      "title": "Credential Management",
+      "description": "Credentials are hardcoded in source control. helpdesk/settings.py contains the PostgreSQL password in plaintext (`'PASSWORD': 'helpdesk2012'`) and a committed Django `SECRET_KEY` (`'x9d2#kf!3v_legacy_secret_do_not_change_2012'`); README.md explicitly acknowledges 'SECRET_KEY committed to settings.py'. Searched for Secrets Manager / Vault / SSM usage and environment-variable indirection: `import os` is present but never used for credentials, and no secrets-management client appears anywhere in the repository.",
+      "gap": "No secrets manager, no rotation, and no environment indirection. Any repository reader obtains database access, and the static SECRET_KEY allows session/signature forgery. Prompt-injection or a verbose error path could surface these values to an agent.",
+      "recommendation": "Move both values to a secrets store (AWS Secrets Manager or SSM Parameter Store) read via environment variables at startup, rotate the database password and SECRET_KEY, and purge the values from git history.",
+      "severity": "High",
       "priority": "P2",
-      "effort": "Low",
-      "phase": 1,
+      "effort": "Medium",
+      "phase": 2,
       "evidence": {
         "file": "helpdesk/settings.py",
-        "lines": "17-26"
+        "lines": "12-29"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "7-14 days"
+        "remediation_timeline": "0-30 days",
+        "compensating_controls": [
+          "Rotate the exposed database password and SECRET_KEY immediately and restrict repository read access.",
+          "Restrict PostgreSQL to localhost-only connections (already 127.0.0.1) and audit for external exposure."
+        ]
       }
     },
     {
@@ -320,24 +340,29 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Immutable Audit Logging",
-      "description": "No audit logging exists. No CloudTrail, no application-level audit trail, no log storage configuration. Only a debug print statement.",
-      "gap": "No tamper-evident audit trail for agent actions. No principal logging for any operation.",
-      "recommendation": "Implement structured audit logging with principal attribution, stored in CloudTrail or equivalent with object lock.",
+      "title": "Immutable Audit Logging",
+      "description": "There is no audit logging of callers. The only logging in the codebase is a debug statement \u2014 `print \"searching tickets for:\", q` in `ticket_search` (tickets/views.py) \u2014 which records the query text but no principal, timestamp, or outcome. Searched for CloudTrail, log-file validation, S3 Object Lock, and CloudWatch retention configuration: no IaC of any kind exists in the repository. Deployment is a manual `git pull` plus Apache restart per README.md, so logs are local Apache/stdout files on one EC2 instance.",
+      "gap": "No principal attribution, no tamper-evident storage, and no retention policy. Agent-initiated reads would be indistinguishable from human traffic, and any log that does exist is mutable on the host.",
+      "recommendation": "Emit structured access logs including the authenticated machine principal, ship them off-host to CloudWatch Logs with a retention policy, and store archived copies in an S3 bucket with Object Lock for tamper evidence.",
       "severity": "High",
       "priority": "P1",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "tickets/views.py",
-        "lines": "21"
+        "lines": "18-23"
       },
       "ara_metadata": {
-        "native_severity": "BLOCKER",
+        "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging exists",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agents require full audit attribution. No audit logging of any kind exists in this application."
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, so immutable audit logging is a safety risk rather than a deployment blocker.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "has_write_operations=false, so the conditional BLOCKER resolves to its read-only severity (RISK-SAFETY). The system still has an auth surface and an HTTP surface, so the surface-flag INFO downgrade does not apply.",
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Enable and off-host Apache access logs with the agent's source identity pinned to a dedicated client certificate or key.",
+          "Route agent traffic through a gateway that produces attributable access logs."
+        ]
       }
     },
     {
@@ -345,21 +370,26 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Agent Identity Suspension Mechanism",
-      "description": "No mechanism to suspend or revoke individual agent identities. Session-based auth only with no key management.",
-      "gap": "Cannot isolate a misbehaving agent without taking down the entire application.",
-      "recommendation": "Implement API key-based auth with per-agent keys that can be individually revoked.",
-      "severity": "Medium",
+      "title": "Agent Identity Suspension",
+      "description": "No revocation mechanism exists. Because there are no API keys, service accounts, or agent identities (AUTH-Q1), there is nothing to suspend. The only identity lifecycle available is disabling a Django user via django.contrib.admin, which requires a human account and does not isolate a machine caller.",
+      "gap": "A misbehaving agent could only be stopped by blocking it at the network layer or taking the single Apache instance down \u2014 which also removes service for all human users.",
+      "recommendation": "Issue per-agent credentials that can be individually disabled (API key deactivation or IAM/IdP client disable) and document a revocation runbook that does not require a service restart.",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "helpdesk/settings.py",
-        "lines": null
+        "lines": "33-40"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Terminate agent access via a reverse-proxy allowlist entry that can be removed without restarting Django.",
+          "Keep agent traffic on a dedicated vhost/port that can be closed independently."
+        ]
       }
     },
     {
@@ -367,68 +397,29 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No Compensation or Rollback",
-      "description": "No compensation or rollback mechanisms. No saga patterns, no undo endpoints, no compensating transactions, no Step Functions.",
-      "gap": "Failed multi-step operations leave the system in partial state with no recovery path.",
-      "recommendation": "Implement transaction boundaries with explicit rollback on failure for multi-step ticket operations.",
+      "title": "Compensation and Rollback",
+      "description": "No compensation or rollback capability is present. tickets/views.py uses `connection.cursor()` for direct SQL reads with no transaction management (`transaction.atomic` / `commit_on_success` do not appear), no saga or compensating-action code, and no undo endpoints. There are no multi-step write workflows in the repository to compensate for, but there is also no mechanism available if writes are added.",
+      "gap": "The codebase has no transactional envelope at all, so a future multi-step agent workflow would leave partial state with no recovery path.",
+      "recommendation": "Wrap any future multi-step write path in an explicit database transaction and expose compensating operations (e.g., ticket status revert) before enabling write-capable agents.",
       "severity": "High",
       "priority": "P0",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no rollback/compensation logic exists",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agents executing multi-step workflows on this ticketing system have no rollback mechanism for partial failures."
-      }
-    },
-    {
-      "question_id": "STATE-Q2",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "State Not Machine-Queryable",
-      "description": "Views query ticket state but return HTML, not a machine-queryable format. No JSON endpoints for state inspection.",
-      "gap": "Agents cannot programmatically inspect ticket state before taking action.",
-      "recommendation": "Expose ticket state as JSON endpoints with filtering and field selection.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": "7-14"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "STATE-Q3",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Concurrency Controls",
-      "description": "No optimistic locking, no pessimistic locking, no version fields, no ETags, no conflict resolution logic.",
-      "gap": "Multiple concurrent agent instances could create race conditions corrupting ticket state.",
-      "recommendation": "Implement optimistic locking with version fields on ticket entities.",
-      "severity": "Medium",
-      "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "tickets/views.py",
-        "lines": null
+        "lines": "7-29"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, so compensation is a safety risk rather than a deployment blocker.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "has_write_operations=false resolves the conditional to its read-only severity. The surface-flag INFO downgrade requires has_http_rpc_surface=false as well, which is not the case (Django views are served over HTTP), so RISK-SAFETY stands.",
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": [
+          "Keep the agent scoped to read operations so no partial state can be created.",
+          "Take verified database backups more frequently than the daily pg_dump cron described in README.md."
+        ]
       }
     },
     {
@@ -436,21 +427,26 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No Circuit Breakers or Resilience",
-      "description": "No circuit breakers, retry logic, or timeout configurations. SMTP relay connection has no resilience patterns.",
-      "gap": "Failures in email relay cascade back to agents calling the system.",
-      "recommendation": "Implement circuit breaker patterns for all external calls including SMTP relay.",
-      "severity": "Medium",
+      "title": "Circuit Breakers and Resilience",
+      "description": "No resilience controls protect the system's own dependencies. It calls PostgreSQL (helpdesk/settings.py DATABASES) and an on-prem SMTP relay at `exchange.acme-corp.internal:25`. Searched for retry logic, exponential backoff, circuit breakers, and timeout configuration: none present \u2014 `connection.cursor()` calls in tickets/views.py are unguarded, and no `EMAIL_TIMEOUT` or connection timeout is configured.",
+      "gap": "A slow or unavailable PostgreSQL or Exchange relay causes requests to hang on Apache's worker threads with no circuit breaker, so agent-speed traffic can exhaust the single instance and cascade failures back to the caller.",
+      "recommendation": "Set explicit database and SMTP timeouts, add bounded retry with backoff around the external relay, and add a circuit breaker (or a queue for email) so dependency latency cannot consume all request workers.",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "helpdesk/settings.py",
-        "lines": "42-43"
+        "lines": "12-22"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Configure Apache/mod_wsgi request timeouts to bound hung requests.",
+          "Cap agent concurrency at the client side until server-side resilience exists."
+        ]
       }
     },
     {
@@ -458,21 +454,26 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No Rate Limiting",
-      "description": "No rate limiting at any layer. No API Gateway, no WAF, no application-level rate limiting middleware.",
-      "gap": "Runaway agent loops can overwhelm the application at machine speed.",
-      "recommendation": "Deploy rate limiting immediately — at minimum Apache-level, ideally API Gateway with per-caller throttle.",
-      "severity": "Medium",
+      "title": "Rate Limiting and Throttling",
+      "description": "No rate limiting exists at any layer. helpdesk/settings.py MIDDLEWARE_CLASSES contains only CommonMiddleware, SessionMiddleware and AuthenticationMiddleware \u2014 no `django-ratelimit` or throttling middleware. No API Gateway, WAF, or usage-plan IaC exists in the repository, and README.md describes a single Apache 2.2 + mod_wsgi EC2 instance with the database on the same box.",
+      "gap": "A runaway agent loop would hit unbounded raw-SQL queries (including the unindexed `LIKE '%...%'` search in tickets/views.py) on a co-located PostgreSQL instance, taking down the app and its database together.",
+      "recommendation": "Add per-principal throttling in front of the agent-facing API (gateway usage plan or django-ratelimit) with a conservative requests-per-minute ceiling for agent keys.",
+      "severity": "High",
       "priority": "P1",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "helpdesk/settings.py",
-        "lines": null
+        "lines": "28-32"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "0-30 days",
+        "compensating_controls": [
+          "Enforce a client-side request budget and concurrency cap in the agent orchestrator.",
+          "Apply mod_ratelimit / mod_qos at Apache as an interim server-side control."
+        ]
       }
     },
     {
@@ -480,65 +481,24 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No Blast Radius or Transaction Limits",
-      "description": "No transaction limits. No maximum records modified per run, no spend caps, no operation-count limits.",
-      "gap": "Agent errors have unbounded blast radius — could modify or delete unlimited records.",
-      "recommendation": "Implement configurable per-caller transaction limits.",
-      "severity": "Medium",
+      "title": "Blast Radius and Transaction Limits",
+      "description": "No business-domain transaction limits exist. There are no per-caller caps, bulk-operation size limits, or spend thresholds anywhere in the repository; `ticket_list` and `ticket_search` return every matching row with no `LIMIT`. With no write operations present, blast-radius limits are informational for the current surface.",
+      "gap": "If write capability is added, there would be no cap on records modified or deleted per agent run.",
+      "recommendation": "Before enabling write-capable agents, add configurable per-principal caps (e.g., max records modified per run) independent of request-rate throttling.",
+      "severity": "Low",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "tickets/views.py",
-        "lines": null
+        "lines": "7-16"
       },
       "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true
-      }
-    },
-    {
-      "question_id": "HITL-Q1",
-      "category": "Human-in-the-Loop",
-      "category_display": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Draft/Pending State",
-      "description": "No draft or pending state mechanism. All write operations immediately committed. No approval workflows.",
-      "gap": "No mechanism for an agent to propose changes for human review before commitment.",
-      "recommendation": "Add PENDING/DRAFT status to ticket state machine allowing agent-proposed changes to await confirmation.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true
-      }
-    },
-    {
-      "question_id": "HITL-Q2",
-      "category": "Human-in-the-Loop",
-      "category_display": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Configurable Approval Gates",
-      "description": "No approval gate mechanism. No configurable operation-level flags, no approval endpoints.",
-      "gap": "Cannot require human approval for high-risk agent operations.",
-      "recommendation": "Implement per-operation approval gates configurable by operation type.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only, so write blast-radius limits are informational.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "has_write_operations=false, so STATE-Q6 downgrades from RISK to INFO under the scope calibration."
       }
     },
     {
@@ -546,21 +506,26 @@
       "category": "Human-in-the-Loop",
       "category_display": "Human-in-the-Loop",
       "category_id": "HITL",
-      "title": "No Sandbox/Staging Environment",
-      "description": "No sandbox or staging environment. Single production EC2 with manual git pull deployment.",
-      "gap": "No safe environment to test agent behavior before production.",
-      "recommendation": "Create Docker Compose local development environment with seed data.",
+      "title": "Sandbox/Staging Environment",
+      "description": "No sandbox or staging environment is defined. The repository contains a single `helpdesk/settings.py` with `DEBUG = True` and one hardcoded database (`helpdesk` on 127.0.0.1) \u2014 there are no per-environment settings modules, no docker-compose, no seed or synthetic data scripts, and no environment-specific IaC. README.md describes deployment as 'git pull on the server + manual apache restart' against a single EC2 instance.",
+      "gap": "There is no non-production target with production-equivalent data shape, so the first execution of any agent against this system would be against live helpdesk data.",
+      "recommendation": "Create a staging environment from IaC with a sanitized copy of the ticket schema and seeded synthetic tickets, and require agent validation there before production access.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "High",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
-        "lines": null
+        "file": "helpdesk/settings.py",
+        "lines": "1-22"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": [
+          "Run agent validation against a locally restored pg_dump copy before any production call.",
+          "Begin with read-only agent scope so production impact is limited to query load."
+        ]
       }
     },
     {
@@ -568,41 +533,46 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "Sensitive Data Unscoped in API Responses",
-      "description": "Stage A: Yes — stores employee PII (requester names, emails). Stage B: B1 fires (raw SQL returns all columns unscoped), B2 fires (no access differentiation), B3 absent (no classification metadata).",
-      "gap": "Agent-facing responses expose all fields including employee PII without scoping. No differentiated access controls.",
-      "recommendation": "Implement response serialization excluding sensitive fields. Add role-based access differentiation.",
+      "title": "Sensitive Data Classification",
+      "description": "Stage A = Yes: the system stores user-specific helpdesk data \u2014 `tickets_ticket` carries `requester`, `subject`, `priority` and `status` (queried in tickets/views.py), and `has_logging_of_user_data` is true because `ticket_search` prints the user-supplied query string. Stage B results: B1 is CLEAR \u2014 both queries use explicit column projections (`SELECT id, subject, requester, priority` and `SELECT id, subject`) and no credential or password column is exposed; Django auth tables are not surfaced by either view. B2 FIRES \u2014 there is no access-control differentiation whatsoever: no permission checks in the views, no scopes, no row- or column-level security, so a single reachable URL grants access to all ticket content including requester identity and free-text subjects. B3 is absent \u2014 no classification tags, field-level sensitivity annotations, or PII-detection tooling (Macie/Presidio) appear in the repository.",
+      "gap": "Sensitive-field exclusion happens only incidentally through hand-written SELECT lists, and no access tier separates general ticket metadata from requester-identifying or free-text content. Formal classification metadata is absent (B3, INFO).",
+      "recommendation": "Introduce at least two access tiers for ticket data (metadata-only vs. full content including `requester` and `subject`) enforced in the API layer, and annotate requester/subject as sensitive fields so projections are deliberate rather than incidental.",
       "severity": "High",
       "priority": "P0",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "tickets/views.py",
-        "lines": "9-14"
+        "lines": "10-27"
       },
       "ara_metadata": {
-        "native_severity": "BLOCKER",
+        "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND B1 fired (sensitive fields returned unscoped)",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "DATA-Q1 B1 fired because raw SQL returns all columns including requester (employee PII) without filtering. B2 also fires due to no access differentiation.",
+        "conditional_resolution": "Resolved to RISK-SAFETY: B1 is clear (explicit non-sensitive column projections), B2 fires (no access differentiation) which is RISK-SAFETY, B3 absent is INFO; highest firing sub-check is B2.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "agent_scope=read-only and B1 did not fire, so the BLOCKER path was not reached; DATA-Q1 resolves to the RISK-SAFETY severity of the B2 sub-check.",
         "data_q1_subchecks": {
           "b1": {
-            "fired": true,
-            "severity": "BLOCKER",
-            "reasoning": "Raw SQL returns all columns including requester PII without exclusion"
+            "fired": false,
+            "severity": null,
+            "reasoning": "Both raw SQL statements in tickets/views.py use explicit column projections limited to id, subject, requester, priority; no password, token, or credential column is returned."
           },
           "b2": {
             "fired": true,
             "severity": "RISK-SAFETY",
-            "reasoning": "No access control differentiation - single permission level for all data"
+            "reasoning": "No permission checks, scopes, or row/column-level security exist; any caller reaching the view receives all ticket rows including requester identity."
           },
           "b3": {
             "fired": true,
             "severity": "INFO",
-            "reasoning": "No formal data classification metadata exists"
+            "reasoning": "No classification tags, field-level sensitivity annotations, or PII detection tooling found in any of the 4 repository files."
           }
-        }
+        },
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Expose a metadata-only projection (id, status, priority) to the agent and withhold requester/subject until tiering exists.",
+          "Terminate agent access at a proxy that strips requester fields from responses."
+        ]
       }
     },
     {
@@ -610,24 +580,29 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No Data Residency Controls",
-      "description": "Employee PII stored in PostgreSQL on single EC2 without residency controls. No region constraints, no sovereignty policies, no LLM transmission controls.",
-      "gap": "Zero data residency controls. Employee PII could be transmitted to any LLM provider jurisdiction without restriction.",
-      "recommendation": "Document data residency requirements. Implement data classification and transmission controls for LLM interactions.",
+      "title": "Data Residency and Sovereignty",
+      "description": "The system holds persistent user data in PostgreSQL (helpdesk/settings.py) and logs user-submitted search text (tickets/views.py), so residency constraints are in scope. Searched for residency or sovereignty signals: README.md documents a single EC2 instance with a co-located PostgreSQL 9.1 and an on-prem Exchange relay but states no jurisdiction; there are no GDPR/LGPD references, no region-pinning configuration, and no cross-region replication settings. The only locality signal in the codebase is `TIME_ZONE = 'America/New_York'`.",
+      "gap": "Residency obligations for internal helpdesk tickets (which can contain employee-identifying content) are undocumented, so there is no basis to decide whether ticket content may be sent to an LLM endpoint in another region.",
+      "recommendation": "Document the data classification and permitted processing jurisdictions for ticket content, and pin agent/LLM inference to an approved region before any ticket text leaves the current environment.",
       "severity": "High",
       "priority": "P1",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 1,
       "evidence": {
-        "file": "helpdesk/settings.py",
-        "lines": "14-22"
+        "file": "README.md",
+        "lines": "6-14"
       },
       "ara_metadata": {
-        "native_severity": "BLOCKER",
+        "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no data residency controls for employee PII",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "The system stores employee PII (requester names in tickets) with zero residency controls. Write-enabled agent could transmit data to any LLM endpoint."
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, so residency is a safety risk rather than a deployment blocker.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "has_persistent_data_store=true and has_logging_of_user_data=true, so the surface-flag INFO downgrade does not apply; has_write_operations=false resolves the conditional to the read-only severity.",
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Restrict agent inference to an in-region endpoint until residency requirements are documented.",
+          "Limit agent-visible fields to non-identifying ticket metadata."
+        ]
       }
     },
     {
@@ -635,21 +610,26 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No Pagination or Query Limits",
-      "description": "No pagination, no result limiting, no cursor-based queries. Both ticket_list and ticket_search return unbounded results.",
-      "gap": "Agents retrieving tickets would get unbounded result sets exhausting LLM context windows.",
-      "recommendation": "Add pagination (limit/offset or cursor) to all list and search endpoints.",
+      "title": "Selective Query Support",
+      "description": "Queries are unbounded. `ticket_list` executes `SELECT id, subject, requester, priority FROM tickets_ticket WHERE status = '...' ORDER BY created DESC` with no `LIMIT`/`OFFSET`, and `ticket_search` runs `LIKE '%...%'` across the table and materializes every row with `fetchall()`. The only filter available is the single `status` or `q` GET parameter; no pagination, cursor, page-size, or sort parameters exist.",
+      "gap": "An agent calling the list view receives every open ticket in one response, exhausting context windows and loading the co-located database.",
+      "recommendation": "Add `limit`/`offset` (or cursor) parameters with a server-enforced maximum page size and a default cap, and expose field-level filtering on status, priority, and date range.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "tickets/views.py",
-        "lines": "10-14"
+        "lines": "7-27"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Enforce a narrow status filter on every agent call and reject large responses client-side.",
+          "Add a database-level statement timeout to bound runaway queries."
+        ]
       }
     },
     {
@@ -657,21 +637,26 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No Input Validation — SQL Injection Vulnerable",
-      "description": "No input validation. Raw user input directly interpolated into SQL via Python string formatting, creating SQL injection vulnerabilities in both views.",
-      "gap": "Complete absence of input validation. SQL injection vulnerabilities. No schema enforcement, no type checking.",
-      "recommendation": "Replace all string-formatted SQL with parameterized queries immediately. Implement input validation framework.",
+      "title": "Input Validation and Schema Enforcement",
+      "description": "There is no input validation, and the inputs flow into raw SQL by string interpolation. `ticket_list` takes `request.GET.get('status', 'OPEN')` and formats it into the WHERE clause with `% status`; `ticket_search` formats `q` into a `LIKE '%%%s%%'` clause. Searched for validation libraries and parameterized queries: no forms, no serializers, no pydantic/marshmallow, no `cursor.execute(sql, params)` parameter binding, and no request size limits anywhere in the repository. `ticket_search` additionally concatenates row values into an HTML response without escaping.",
+      "gap": "Unvalidated input is concatenated into SQL \u2014 an exploitable SQL injection path \u2014 and there are no structured field-level validation errors for an agent to self-correct against. Unescaped output concatenation is an additional stored/reflected XSS path.",
+      "recommendation": "Convert both queries to parameter binding (`cursor.execute(sql, [status])`) or the Django ORM, validate `status` against an allowlist enum and `q` against a length/charset bound, return field-level JSON validation errors, and escape all template output.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
-      "phase": 1,
+      "effort": "Medium",
+      "phase": 2,
       "evidence": {
         "file": "tickets/views.py",
-        "lines": "11-23"
+        "lines": "8-27"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "0-30 days",
+        "compensating_controls": [
+          "Place a WAF/input allowlist in front of the endpoints until queries are parameterized.",
+          "Restrict the database user to SELECT-only on tickets_ticket to bound injection impact."
+        ]
       }
     },
     {
@@ -679,21 +664,26 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "Incomplete Temporal Metadata",
-      "description": "Only a 'created' field is visible. No updated_at, no timezone normalization, no cache headers, no freshness signaling.",
-      "gap": "Incomplete temporal metadata for agent reasoning about data freshness.",
-      "recommendation": "Add updated_at timestamp with UTC normalization. Implement Cache-Control and Last-Modified headers.",
+      "title": "Temporal Metadata and Freshness",
+      "description": "Temporal metadata exists but is not exposed or normalized. `ticket_list` orders by a `created` column (`ORDER BY created DESC`), so creation time is stored, but `created` is not included in the selected fields returned to callers, there is no `updated_at` evidence, and helpdesk/settings.py sets `TIME_ZONE = 'America/New_York'` with Django 1.4 (no `USE_TZ` setting present), so timestamps are local-time rather than UTC-normalized. No `Cache-Control`, data-age, or consistency-level signaling exists in the responses.",
+      "gap": "Callers receive no timestamps at all and no freshness or staleness indicator, so an agent cannot reason about how current a ticket record is.",
+      "recommendation": "Return `created` and `updated` timestamps in UTC (ISO-8601) on every ticket payload, set `USE_TZ`-equivalent UTC storage, and add explicit freshness headers on the API layer.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "tickets/views.py",
-        "lines": "11"
+        "lines": "11-14"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Have the agent treat all ticket data as potentially stale and re-query before acting.",
+          "Expose a single `server_time` field so relative age can be computed."
+        ]
       }
     },
     {
@@ -701,21 +691,26 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "PII Logged Unredacted",
-      "description": "User search queries logged via print statement without redaction. ticket_search function prints raw user query which could contain PII.",
-      "gap": "PII from user-submitted search queries logged unredacted. No PII masking in any logging path.",
-      "recommendation": "Remove debug print statements. Implement structured logging with PII masking.",
-      "severity": "Medium",
+      "title": "PII Redaction in Logs",
+      "description": "User-submitted content is written to logs unredacted and error output is verbose. `ticket_search` executes `print \"searching tickets for:\", q` (tickets/views.py) \u2014 the raw search string, which in a helpdesk context routinely contains employee names, email addresses, and account details \u2014 and under mod_wsgi stdout lands in the Apache error log. `DEBUG = True` in helpdesk/settings.py causes Django to render full tracebacks including local variables and query parameters. Searched for log scrubbing middleware, PII masking utilities, CloudWatch log filters, or Macie integration: none found.",
+      "gap": "There is no redaction layer, so PII entered into search queries and present in exception context is persisted to host log files with no retention or access control.",
+      "recommendation": "Remove the debug `print`, set `DEBUG = False`, route logging through Django's logging framework with a redaction filter for free-text and identifier fields, and restrict and expire the resulting log storage.",
+      "severity": "High",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "tickets/views.py",
-        "lines": "21"
+        "lines": "18-23"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "0-30 days",
+        "compensating_controls": [
+          "Delete the debug print and disable DEBUG as an immediate hotfix.",
+          "Restrict Apache log file access and set aggressive log rotation/retention."
+        ]
       }
     },
     {
@@ -723,17 +718,17 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No Data Quality Awareness",
-      "description": "No data quality metrics, no completeness monitoring, no duplicate detection, no freshness SLAs.",
-      "gap": "No quality signals for agent reasoning about data reliability.",
-      "recommendation": "Implement basic data quality monitoring (null rate, duplicate tickets, completeness metrics).",
+      "title": "Data Quality Awareness",
+      "description": "No data quality measurement exists. The repository holds a PostgreSQL-backed ticket table but contains no data profiling, null-rate monitoring, duplicate detection, freshness SLA, or quality dashboard definitions. README.md notes the database has no backup beyond a daily pg_dump cron, and no quality tooling is referenced.",
+      "gap": "There is no completeness or accuracy signal for ticket data, so agent reasoning quality on this dataset is unmeasured.",
+      "recommendation": "Profile the `tickets_ticket` table for null rates on `status`, `priority` and `requester`, and publish a simple completeness metric before relying on the data for agent decisions.",
       "severity": "Low",
       "priority": "P3",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 3,
       "evidence": {
         "file": "README.md",
-        "lines": null
+        "lines": "20-28"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -745,20 +740,47 @@
       "category": "Discovery & Documentation",
       "category_display": "Discovery & Documentation",
       "category_id": "DISC",
-      "title": "No Schema Versioning or API Contracts",
-      "description": "No schema versioning, no API contracts, no breaking change detection. No migration files, no changelog, no contract tests.",
-      "gap": "Agent tool bindings break silently on any schema or endpoint change.",
-      "recommendation": "Implement database migrations, API versioning, and breaking change detection in CI.",
+      "title": "Schema Versioning and API Contracts",
+      "description": "No schema or contract versioning exists. Searched for migration files, JSON Schema, Avro/Protobuf definitions, a schema registry, `/v1/` URL patterns, `Accept-Version` handling, changelogs, and breaking-change detection tooling: none found. The ticket schema is implied only by the hand-written SQL column lists in tickets/views.py; Django 1.4 predates built-in migrations and no South migrations directory is present. `ROOT_URLCONF = 'helpdesk.urls'` references a URL module that is not in the repository, so even the route contract is not captured here.",
+      "gap": "Any column rename or type change in `tickets_ticket` silently breaks the raw SQL in tickets/views.py and any agent tool bound to it, with no versioning or CI detection to catch it.",
+      "recommendation": "Capture the ticket schema in versioned migrations, version the new API under `/api/v1/`, and add breaking-change detection (OpenAPI diff) to CI once a spec exists.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "tickets/views.py",
-        "lines": null
+        "lines": "10-27"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": [
+          "Pin the agent tool definition to the exact column list and fail loudly on shape mismatch.",
+          "Require schema-change review for tickets_ticket until migrations exist."
+        ]
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Semantically Meaningful Field Names",
+      "description": "Field names are readable and semantically meaningful. The columns referenced in tickets/views.py are `id`, `subject`, `requester`, `priority`, `status`, and `created` \u2014 plain English, no legacy codes requiring a data dictionary. The table name `tickets_ticket` follows Django's app_model convention.",
+      "gap": "No data dictionary is needed for an LLM to interpret these fields, which lowers the cost of authoring agent tools. The gap is that these names are discoverable only by reading raw SQL, not from a published schema.",
+      "recommendation": "Preserve these names verbatim in the new API payloads so agent tooling can rely on them, and document them alongside the OpenAPI spec.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "tickets/views.py",
+        "lines": "10-14"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
         "safety_impact": false
       }
     },
@@ -767,17 +789,17 @@
       "category": "Discovery & Documentation",
       "category_display": "Discovery & Documentation",
       "category_id": "DISC",
-      "title": "No Data Catalog or Metadata Layer",
-      "description": "No data catalog or metadata layer describing what data the system holds and what it means semantically.",
-      "gap": "Agent tool builders must reverse-engineer schema from source code.",
-      "recommendation": "Document database schema and field semantics.",
+      "title": "Data Catalog / Metadata Layer",
+      "description": "No data catalog or metadata layer exists. The system owns a PostgreSQL database but the repository contains no Glue Data Catalog definitions, no DataHub/Collibra/Alation references, no data dictionary file, and no schema documentation \u2014 README.md documents runtime topology only (Python 2.7, Django 1.4, PostgreSQL 9.1, Apache + mod_wsgi) and lists known issues, not data semantics.",
+      "gap": "Teams building agent tools must reverse-engineer ticket semantics from raw SQL in tickets/views.py.",
+      "recommendation": "Publish a lightweight data dictionary for `tickets_ticket` (field, type, meaning, allowed status/priority values) in the repository as the first catalog entry.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
       "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
+        "file": "README.md",
+        "lines": "1-28"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -789,21 +811,26 @@
       "category": "Observability",
       "category_display": "Observability",
       "category_id": "OBS",
-      "title": "No Distributed Tracing or Structured Logging",
-      "description": "No tracing (no X-Ray, no OpenTelemetry). No structured logging — only debug print statements. No correlation IDs.",
-      "gap": "Cannot debug agent-initiated requests through the system.",
-      "recommendation": "Implement OpenTelemetry or X-Ray instrumentation with structured JSON logging and correlation IDs.",
+      "title": "Distributed Tracing and Structured Logging",
+      "description": "There is neither tracing nor structured logging. Searched for OpenTelemetry, X-Ray instrumentation, `traceparent` propagation, JSON log formatting, and `request_id`/`correlation_id` fields: none present. helpdesk/settings.py defines no `LOGGING` configuration at all, and the only log statement in the codebase is the unstructured `print \"searching tickets for:\", q` in tickets/views.py. Logs are therefore plain Apache text files on a single EC2 instance (README.md).",
+      "gap": "An agent-initiated request cannot be correlated across the request path, and there is no trace ID or request ID to pivot on when a call fails.",
+      "recommendation": "Add a `LOGGING` configuration emitting JSON with a per-request correlation ID (accepting an inbound `traceparent`/request-ID header from the agent), and ship logs off-host to CloudWatch Logs.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "tickets/views.py",
-        "lines": "21"
+        "file": "helpdesk/settings.py",
+        "lines": "1-10"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Have the agent record its own request IDs and send them as a header so they appear in Apache access logs.",
+          "Enable Apache's extended log format with response time as an interim signal."
+        ]
       }
     },
     {
@@ -811,21 +838,26 @@
       "category": "Observability",
       "category_display": "Observability",
       "category_id": "OBS",
-      "title": "No Alerting on Error Rates or Latency",
-      "description": "No alerting configured. No CloudWatch alarms, no monitoring integration. Only Django ADMINS email.",
-      "gap": "Agent-induced issues undetectable without manual investigation.",
-      "recommendation": "Implement CloudWatch alarms on HTTP error rates and response latency.",
+      "title": "Alerting on Error Rates and Latency",
+      "description": "No alerting is configured. The repository contains no CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie integration, and no SLO definitions \u2014 there is no IaC of any kind. The only operational notification path is Django's `ADMINS = (('IT Ops', 'it-ops@acme-corp.internal'),)` in helpdesk/settings.py, which emails unhandled exceptions; with `DEBUG = True` even that path is suppressed, because Django does not send error mail while DEBUG is on.",
+      "gap": "Error-rate and latency degradation on the endpoints an agent would consume is entirely undetected, so cascading failures would be discovered only by user complaint.",
+      "recommendation": "Publish error-rate and latency metrics for the agent-facing endpoints and configure alarms with explicit thresholds routed to IT Ops; as an immediate step, set `DEBUG = False` so the existing ADMINS error mail actually fires.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "helpdesk/settings.py",
-        "lines": "8-10"
+        "lines": "5-10"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Add external synthetic monitoring (HTTP check) on the agent-facing URL.",
+          "Have the agent orchestrator alert on its own observed error rate and latency."
+        ]
       }
     },
     {
@@ -833,21 +865,26 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No Infrastructure as Code",
-      "description": "No IaC exists. Manually provisioned single EC2 instance. No Terraform, CloudFormation, or CDK.",
-      "gap": "No peer-reviewed, drift-detected infrastructure governance.",
-      "recommendation": "Define all infrastructure as Terraform/CDK with PR-based review and drift detection.",
+      "title": "Infrastructure Governance for Agent-Facing Surface",
+      "description": "The agent-facing surface is not defined as code. Searched the repository for Terraform (`.tf`), CloudFormation, CDK, Helm, Kustomize, and Ansible definitions: none exist. README.md states the architecture is a single EC2 instance with Apache 2.2 + mod_wsgi on Ubuntu 12.04 and PostgreSQL on the same box, deployed by 'git pull on the server + manual apache restart'. There is consequently no peer-reviewed change process for the integration surface and no drift detection (no AWS Config rules).",
+      "gap": "All three required controls are absent: no IaC definition of the serving/IAM/network surface, no automated plan or review gate on infrastructure changes, and no drift detection. Host configuration is mutable by hand.",
+      "recommendation": "Codify the agent-facing surface (instance/ALB, security groups, IAM role, secrets) in Terraform or CDK, require pull-request review with an automated plan step, and enable drift detection.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
       "phase": 2,
       "evidence": {
         "file": "README.md",
-        "lines": null
+        "lines": "5-13"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "90-180 days",
+        "compensating_controls": [
+          "Freeze manual host changes and require a change ticket plus two-person review for the agent-facing surface.",
+          "Snapshot the instance configuration and diff it on a schedule as interim drift detection."
+        ]
       }
     },
     {
@@ -855,21 +892,26 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No CI/CD Pipeline",
-      "description": "No CI/CD pipeline. Deployment is manual git pull + apache restart. No automated testing or contract testing.",
-      "gap": "API-breaking changes not caught before production.",
-      "recommendation": "Implement CI/CD pipeline with automated API contract testing.",
+      "title": "CI/CD with API Contract Testing",
+      "description": "There is no CI/CD pipeline. Searched for `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `buildspec.yml`, and CodePipeline definitions: none present (the repository contains only .gitignore, README.md, helpdesk/settings.py, and tickets/views.py). README.md confirms deployment is a manual `git pull` plus Apache restart, so no automated test, no API contract test, and no breaking-change detection runs before production.",
+      "gap": "API-breaking changes reach production unchecked, with nothing in the path to detect that an agent-facing contract has changed.",
+      "recommendation": "Introduce a pipeline that runs unit and API tests on every commit and blocks merges on an OpenAPI diff that reports breaking changes against the published spec.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "High",
       "phase": 2,
       "evidence": {
         "file": "README.md",
-        "lines": null
+        "lines": "11-13"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": [
+          "Require manual pre-deploy smoke tests of the agent-facing endpoints, recorded in the change ticket.",
+          "Gate deployments on a scheduled window with a rollback owner on call."
+        ]
       }
     },
     {
@@ -877,21 +919,26 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No Rollback Capability",
-      "description": "No rollback capability. Manual git pull deployment with no version tracking, no blue/green, no canary.",
-      "gap": "Cannot reliably roll back broken deployments.",
-      "recommendation": "Implement automated deployment with rollback triggers.",
+      "title": "Rollback Capability",
+      "description": "No rollback capability is defined. Deployment is 'git pull on the server + manual apache restart' (README.md), with no blue/green configuration, no CodeDeploy rollback trigger, no canary or traffic shifting, and no feature flags anywhere in the repository. Recovery would depend on a manual `git checkout` of a prior commit on a single host, and any accompanying database change has no down-path (no migrations exist \u2014 see DISC-Q1).",
+      "gap": "There is no tested, time-bounded path back to the last known-good state, so a change that breaks an agent-facing endpoint leaves agents non-functional for an unbounded period.",
+      "recommendation": "Adopt versioned, immutable deploys with a one-command rollback (e.g., release directories with an atomic symlink swap, or blue/green behind a load balancer) and rehearse rollback to meet a 15-30 minute objective.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "README.md",
-        "lines": null
+        "lines": "11-13"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": [
+          "Document and rehearse a manual rollback runbook (git checkout of the prior tag plus restart) with a named owner.",
+          "Tag every deployed commit so the known-good revision is unambiguous."
+        ]
       }
     },
     {
@@ -899,21 +946,26 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No API Test Coverage",
-      "description": "No test files in repository. README mentions stale unit tests. No API test suites, no integration tests in CI.",
-      "gap": "No automated test coverage for agent-facing endpoints.",
-      "recommendation": "Create comprehensive API test suite covering input validation, error responses, and edge cases.",
+      "title": "API Test Coverage",
+      "description": "There is effectively no test coverage. No test files exist in the repository (no `tests.py`, no `test_*.py`, no Postman/Newman collections, no integration test directory), and no CI configuration to run them. README.md states 'No tests beyond a couple of stale unit tests' \u2014 those tests are not present in this repository snapshot, so even they cannot be executed or verified.",
+      "gap": "Input handling, output format, and error behavior of the endpoints an agent would consume are completely unverified, including the raw SQL paths flagged in DATA-Q4.",
+      "recommendation": "Add endpoint tests covering the status filter, the search path, empty results, and malformed input for both views, and run them in the pipeline from ENG-Q2.",
       "severity": "Medium",
       "priority": "P3",
       "effort": "Medium",
       "phase": 3,
       "evidence": {
         "file": "README.md",
-        "lines": null
+        "lines": "28"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": [
+          "Require a manual test checklist for the two endpoints before each deploy.",
+          "Start with contract smoke tests on the new API layer rather than full coverage."
+        ]
       }
     },
     {
@@ -921,21 +973,26 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No Encryption at Rest",
-      "description": "No encryption at rest. PostgreSQL on local disk with no KMS encryption, no encrypted EBS volumes.",
-      "gap": "Sensitive helpdesk data stored unencrypted on disk.",
-      "recommendation": "Migrate database to RDS with KMS encryption or enable EBS volume encryption.",
+      "title": "Encryption at Rest for Agent-Accessible Data",
+      "description": "Encryption at rest is not configured or evidenced. The data store is PostgreSQL 9.1 running on the same EC2 instance as the application (README.md), connected over `127.0.0.1:5432` (helpdesk/settings.py). Searched for `kms_key_id`, customer-managed KMS keys, and encryption settings in IaC: no IaC exists, so there is no evidence of EBS volume encryption, and README.md notes backups are a daily `pg_dump` cron with no mention of encryption for the dump files.",
+      "gap": "Ticket data \u2014 including requester identity and free-text subjects \u2014 and its backups have no demonstrable encryption at rest, so host or backup-file compromise exposes everything an agent can read.",
+      "recommendation": "Enable EBS encryption with a KMS key for the data volume (or migrate to RDS with encryption at rest enabled), and encrypt pg_dump output at rest with restricted access.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "helpdesk/settings.py",
-        "lines": "14-22"
+        "file": "README.md",
+        "lines": "5-10"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": [
+          "Restrict filesystem and backup-directory permissions and move dumps to an encrypted S3 bucket.",
+          "Limit the database to localhost connections (already configured) and audit host access."
+        ]
       }
     }
   ],
@@ -945,28 +1002,56 @@
       "category_id": "API",
       "title": "Asynchronous Operation Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered — no evidence of operations exceeding 30 seconds or long-running workflows in this CRUD ticketing system."
+      "reason": "Extended question not triggered: both views in tickets/views.py are short synchronous SELECT queries; no long-running operation (>30s) or background job framework (Celery, SQS worker) exists in the repository."
+    },
+    {
+      "question_id": "API-Q7",
+      "category_id": "API",
+      "title": "Event Emission for State Changes",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered: archetype is data-gateway, not stateful-crud or orchestrator, and no state-change path exists (no write endpoints in tickets/views.py)."
+    },
+    {
+      "question_id": "STATE-Q2",
+      "category_id": "STATE",
+      "title": "Queryable Current State",
+      "status": "pass",
+      "reason": "Current ticket state is queryable before action: ticket_list returns id, subject, requester and priority filtered by status, and ticket_search queries by subject, so an agent can read state through GET endpoints without maintaining external state."
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category_id": "STATE",
+      "title": "Concurrency Controls",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered: trigger requires agent_scope=write-enabled, and scope resolved to read-only (has_write_operations=false)."
     },
     {
       "question_id": "STATE-Q7",
       "category_id": "STATE",
       "title": "Graceful Degradation Signaling",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered — no priority provided and service is not identified as P0 or critical path."
+      "reason": "Extended question not triggered: no priority was supplied in additionalPlanContext (no P0 designation) and no critical-path designation exists for this internal helpdesk system."
     },
     {
-      "question_id": "DISC-Q2",
-      "category_id": "DISC",
-      "title": "Semantically Meaningful Field Names",
-      "status": "pass",
-      "reason": "Field names (id, subject, requester, priority, status, created) are human-readable and semantically meaningful. No legacy abbreviations."
+      "question_id": "HITL-Q1",
+      "category_id": "HITL",
+      "title": "Draft/Pending State",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered: trigger requires agent_scope=write-enabled, and scope resolved to read-only (has_write_operations=false)."
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category_id": "HITL",
+      "title": "Configurable Approval Gates",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered: trigger requires agent_scope=write-enabled, and scope resolved to read-only (has_write_operations=false)."
     },
     {
       "question_id": "OBS-Q3",
       "category_id": "OBS",
       "title": "Business Outcome Metrics",
       "status": "pass",
-      "reason": "No metrics or telemetry of any kind emitted — informational signal, no finding emitted."
+      "reason": "Informational-absence suppression: the system emits no metrics or telemetry of any kind (no put_metric_data, no dashboards, no metrics library in helpdesk/settings.py or tickets/views.py), so there is no observability surface to assess and no actionable INFO finding."
     }
   ],
   "remediation_roadmap": {
@@ -981,37 +1066,36 @@
         "phase_name": "Blockers",
         "findings": [
           "API-Q1",
-          "API-Q4",
-          "AUTH-Q1",
-          "AUTH-Q6",
-          "STATE-Q1",
-          "DATA-Q1",
-          "DATA-Q2",
+          "AUTH-Q1"
+        ],
+        "summary": "Create a machine-consumable API surface and a machine identity to authenticate against it. No agent deployment, including a pilot, should proceed until both exist."
+      },
+      {
+        "phase": 1,
+        "phase_name": "Safety",
+        "findings": [
           "AUTH-Q2",
           "AUTH-Q3",
-          "AUTH-Q5",
+          "AUTH-Q6",
           "AUTH-Q7",
-          "STATE-Q3",
+          "STATE-Q1",
           "STATE-Q4",
           "STATE-Q5",
-          "HITL-Q1",
-          "HITL-Q2",
-          "DATA-Q4",
+          "DATA-Q1",
+          "DATA-Q2",
           "DATA-Q6"
         ],
-        "summary": "Resolve all 7 BLOCKERs and critical RISK-SAFETY findings. Requires platform modernization (Python/Django upgrade), identity layer implementation, and security hardening."
+        "summary": "Remove hardcoded credentials, add authorization scoping and per-principal throttling, redact user data from logs, and establish attributable audit logging and revocation."
       },
       {
         "phase": 2,
-        "phase_name": "Safety",
+        "phase_name": "Quality",
         "findings": [
           "API-Q2",
           "API-Q3",
-          "AUTH-Q4",
-          "STATE-Q2",
-          "STATE-Q6",
           "HITL-Q3",
           "DATA-Q3",
+          "DATA-Q4",
           "DATA-Q5",
           "DISC-Q1",
           "OBS-Q1",
@@ -1019,88 +1103,103 @@
           "ENG-Q1",
           "ENG-Q2",
           "ENG-Q3",
+          "ENG-Q4",
           "ENG-Q5"
         ],
-        "summary": "Address remaining RISK-SAFETY and RISK-QUALITY findings. Implement observability, CI/CD, IaC governance, and data management improvements."
-      },
-      {
-        "phase": 3,
-        "phase_name": "Quality",
-        "findings": [
-          "API-Q5",
-          "API-Q7",
-          "API-Q8",
-          "DATA-Q7",
-          "DISC-Q3",
-          "ENG-Q4"
-        ],
-        "summary": "Address INFO findings and remaining quality improvements. Implement event-driven patterns, data quality monitoring, and comprehensive testing."
+        "summary": "Parameterize queries and validate input, add pagination and timestamps, publish a versioned spec and schema, and build CI/CD, rollback, staging, tests, and encryption at rest."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Modernize platform runtime (Python 3.x, Django 4.x+)",
+      "action": "Expose a versioned JSON API for ticket data",
       "question_ids": [
         "API-Q1",
         "API-Q2",
         "API-Q3",
-        "API-Q4"
+        "DATA-Q3",
+        "DISC-Q1"
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "Python 2.7 and Django 1.4 are EOL. Modern frameworks required for all security and API improvements."
+      "rationale": "The system currently renders HTML only, so the only integration paths are screen scraping or direct PostgreSQL access. A versioned JSON API is the prerequisite for every other agent control."
     },
     {
-      "action": "Deploy centralized identity provider with machine identity support",
+      "action": "Introduce machine identity and scoped authorization",
       "question_ids": [
         "AUTH-Q1",
         "AUTH-Q2",
         "AUTH-Q3",
-        "AUTH-Q4",
-        "AUTH-Q7"
+        "AUTH-Q7",
+        "DATA-Q1"
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "Machine identity is the foundational blocker — all authorization, audit, and suspension capabilities depend on it."
+      "rationale": "No machine principal exists and the views perform no permission checks, so access cannot be scoped, attributed, or revoked per agent."
     },
     {
-      "action": "Remove hardcoded credentials and implement secrets management",
+      "action": "Remove hardcoded secrets and rotate them",
       "question_ids": [
         "AUTH-Q5"
       ],
       "priority": "P1",
-      "effort": "Low",
-      "rationale": "Hardcoded SECRET_KEY and database password are immediate security vulnerabilities."
+      "effort": "Medium",
+      "rationale": "helpdesk/settings.py contains a plaintext database password and a committed SECRET_KEY; both are exposed to every repository reader and allow session forgery."
     },
     {
-      "action": "Implement immutable audit logging with principal attribution",
-      "question_ids": [
-        "AUTH-Q6"
-      ],
-      "priority": "P0",
-      "effort": "High",
-      "rationale": "Required for compliance and forensics when agents perform write operations."
-    },
-    {
-      "action": "Fix SQL injection vulnerabilities and implement input validation",
+      "action": "Eliminate the SQL injection path and validate inputs",
       "question_ids": [
         "DATA-Q4"
       ],
       "priority": "P1",
-      "effort": "Low",
-      "rationale": "SQL injection is a critical security vulnerability exploitable by agents or attackers."
+      "effort": "Medium",
+      "rationale": "Both views interpolate GET parameters directly into SQL strings, which is exploitable and gives agents no structured validation feedback."
     },
     {
-      "action": "Implement data residency controls and sensitive data scoping",
+      "action": "Stop leaking user data and tracebacks",
       "question_ids": [
-        "DATA-Q1",
-        "DATA-Q2",
-        "DATA-Q6"
+        "DATA-Q6",
+        "API-Q3",
+        "OBS-Q2"
       ],
-      "priority": "P0",
+      "priority": "P1",
+      "effort": "Low",
+      "rationale": "DEBUG=True in production and a debug print of raw search queries write user-submitted content and internal state into host logs and HTTP responses."
+    },
+    {
+      "action": "Add per-principal throttling and dependency timeouts",
+      "question_ids": [
+        "STATE-Q4",
+        "STATE-Q5",
+        "API-Q8"
+      ],
+      "priority": "P1",
+      "effort": "Medium",
+      "rationale": "A single EC2 instance hosts both Apache and PostgreSQL with no rate limiting and no timeouts, so agent-speed traffic can take down the app and its database together."
+    },
+    {
+      "action": "Establish IaC, CI/CD, rollback, and a staging environment",
+      "question_ids": [
+        "ENG-Q1",
+        "ENG-Q2",
+        "ENG-Q3",
+        "ENG-Q4",
+        "HITL-Q3"
+      ],
+      "priority": "P2",
       "effort": "High",
-      "rationale": "Employee PII must be scoped, classified, and residency-controlled before agent access."
+      "rationale": "Deployment is a manual git pull and Apache restart with no tests, no rollback path, and no non-production target to validate agent behavior against."
+    },
+    {
+      "action": "Encrypt ticket data and backups at rest",
+      "question_ids": [
+        "ENG-Q5",
+        "DATA-Q2"
+      ],
+      "priority": "P2",
+      "effort": "Medium",
+      "rationale": "Ticket content including requester identity sits on an unencrypted co-located volume with unencrypted pg_dump backups and undocumented residency requirements."
     }
-  ]
+  ],
+  "analysis_type": "ara"
 }

@@ -1,18 +1,23 @@
 {
   "analysis_type": "mod",
   "metadata": {
-    "repository": "modern-payments-api",
-    "analysis_date": "2026-08-21",
+    "analysis_type": "mod",
+    "analysis_date": "2026-10-13",
     "td_version": "modernization-readiness-analysis",
+    "repository": "modern-payments-api",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Application source code (Python 3.12) with Lambda handler entry points present alongside resource-provisioning IaC (SAM template defining DynamoDB, Lambda, API Gateway, S3). Single-service deployment with OpenAPI contract.",
+    "repo_type_justification": "Application source with Lambda entry points (src/payments/handlers.py), a dependency manifest (pyproject.toml), and single-service SAM IaC (infra/template.yaml).",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
-    "archetype_justification": "DynamoDB writes (create charge, create refund) with idempotency-keyed state management. CRUD endpoints with entity lifecycle. User-specific data via client_id.",
+    "archetype_justification": "The service owns a persistent DynamoDB ledger and exposes write endpoints (POST /charges, POST /charges/{chargeId}/refunds) alongside a read endpoint; no queue consumers and no multi-service coordination.",
     "priority": null,
     "tags": [],
     "context": null,
+    "preferences": null,
+    "language": "Python 3.12",
+    "loc": 420,
+    "framework": "AWS SAM + AWS Lambda Powertools",
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_at_rest_data_surface": true,
@@ -22,7 +27,7 @@
       "has_iac_provisioning_aws_resources": true
     }
   },
-  "overall_score": 3.19,
+  "overall_score": 3.18,
   "categories": [
     {
       "category_id": "INF",
@@ -36,8 +41,8 @@
       "category_id": "APP",
       "category": "Application Architecture",
       "category_display": "Application Architecture",
-      "numeric_score": 3.67,
-      "score_rating": "Mature",
+      "numeric_score": 3.17,
+      "score_rating": "Partial",
       "severity_status": "Needs Work"
     },
     {
@@ -52,96 +57,90 @@
       "category_id": "SEC",
       "category": "Security Baseline",
       "category_display": "Security Baseline",
-      "numeric_score": 3.5,
-      "score_rating": "Mature",
+      "numeric_score": 3.17,
+      "score_rating": "Partial",
       "severity_status": "Needs Work"
     },
     {
       "category_id": "OPS",
       "category": "Operations & Observability",
       "category_display": "Operations & Observability",
-      "numeric_score": 1.67,
+      "numeric_score": 2.44,
       "score_rating": "Needs Work",
-      "severity_status": "Critical"
+      "severity_status": "Needs Work"
     }
   ],
   "classification": {
-    "tier": "Remediation Required",
-    "high_count": 2,
-    "medium_count": 7,
-    "low_count": 10,
-    "rule_matched": "2-11 High \u2192 Remediation Required",
-    "classification_consistency_check": {
-      "status": "divergent",
-      "score_band": "Partial",
-      "count_tier": "Remediation Required",
-      "reason": "Score 3.19 yields Partial band (equivalent to Pilot-Ready) but 2 High findings (OPS-Q5, OPS-Q6) force Remediation Required tier. The service is mature across INF/APP/DATA/SEC but has significant Operations gaps. The count-based tier is authoritative."
-    }
+    "tier": "Pilot-Ready",
+    "high_count": 0,
+    "medium_count": 10,
+    "low_count": 11,
+    "rule_matched": "0 High, >=2 Medium -> Pilot-Ready",
+    "classification_consistency_check": "consistent"
   },
   "top_gaps": [
     {
       "rank": 1,
-      "question_id": "OPS-Q5",
-      "title": "Deployment Strategy",
+      "question_id": "OPS-Q9",
+      "question": "OPS-Q9: Resource Tagging Governance",
       "score": 1,
-      "gap": "No staged deployment \u2014 no canary, blue/green, or traffic shifting configured",
-      "impact": "Releases go direct-to-production with no rollback safety net"
+      "gap": "No tags on any resource in infra/template.yaml.",
+      "impact": "No cost allocation or ownership attribution for a payment-critical stack."
     },
     {
       "rank": 2,
-      "question_id": "OPS-Q6",
-      "title": "Integration Testing",
-      "score": 1,
-      "gap": "No integration tests \u2014 only unit/contract tests exist",
-      "impact": "Cannot validate end-to-end behavior before deployment"
+      "question_id": "INF-Q11",
+      "question": "INF-Q11: CI/CD Automation",
+      "score": 2,
+      "gap": "CI validates and tests but never deploys; sam deploy is run by hand.",
+      "impact": "Triggers Move to Modern DevOps; release is manual and unauditable."
     },
     {
       "rank": 3,
-      "question_id": "INF-Q11",
-      "title": "CI/CD Automation",
+      "question_id": "OPS-Q5",
+      "question": "OPS-Q5: Deployment Strategy",
       "score": 2,
-      "gap": "CI pipeline has no deploy stage \u2014 deployments are manual",
-      "impact": "Manual deployments create bottlenecks and inconsistency"
+      "gap": "No canary or traffic shifting; rollback is a manual redeploy of the prior artifact.",
+      "impact": "A bad release reaches 100 percent of payment traffic immediately."
     },
     {
       "rank": 4,
-      "question_id": "OPS-Q4",
-      "title": "Anomaly Detection and Alerting",
-      "score": 1,
-      "gap": "No CloudWatch alarms or anomaly detection configured",
-      "impact": "Failures and latency regressions go undetected"
+      "question_id": "OPS-Q2",
+      "question": "OPS-Q2: SLO Definitions",
+      "score": 2,
+      "gap": "Alarm thresholds exist in RUNBOOK.md prose only; no SLOs and no alarms in IaC.",
+      "impact": "Service levels are not enforceable or reproducible."
     },
     {
       "rank": 5,
-      "question_id": "OPS-Q9",
-      "title": "Resource Tagging Governance",
-      "score": 1,
-      "gap": "No tags on any AWS resources",
-      "impact": "Cannot track costs or identify ownership"
+      "question_id": "APP-Q3",
+      "question": "APP-Q3: Async vs Sync Communication",
+      "score": 2,
+      "gap": "All processing is synchronous in-handler; no event emission on ledger writes.",
+      "impact": "Downstream consumers must poll; no decoupled settlement path."
     }
   ],
-  "decomposition_strategy": null,
   "findings": [
     {
       "question_id": "INF-Q3",
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Workflow Orchestration \u2014 in-code patterns only",
-      "description": "The service implements a structured idempotent-put pattern in app.py that performs conditional get-put-put within a single Lambda invocation. No external workflow orchestration service (Step Functions, Temporal) is used.",
-      "gap": "No dedicated workflow orchestration service. If operations grow more complex (multi-step settlements, retries), the in-code approach will not scale.",
-      "recommendation": "Monitor for increasing complexity. Adopt AWS Step Functions if multi-step operations emerge (charge-settle-notify).",
-      "severity": "Low",
+      "title": "Multi-step ledger write orchestrated in handler code",
+      "description": "Archetype-calibrated against the stateful-crud rubric, which expects a dedicated orchestrator for business-critical multi-step operations. The charge/refund flow is a hand-rolled sequence in _idempotent_put (get idempotency record, put ledger row, put idempotency row) with no AWS::StepFunctions::StateMachine in IaC. Scored 2 rather than 1 because the sequence is small and clearly structured.",
+      "gap": "Sequencing and compensation live in application code; a crash between the two put_item calls leaves a ledger row with no idempotency record.",
+      "recommendation": "Make the write pair atomic with DynamoDB TransactWriteItems, or move reconcile/settlement multi-step flows to Step Functions with built-in retry and compensation.",
+      "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "src/payments/app.py",
         "lines": null
       },
       "mod_metadata": {
-        "internal_score": 3,
-        "score_label": "Partial",
+        "internal_score": 2,
+        "score_label": "Needs Work",
         "archetype_calibrated": true,
         "core_question": false
       }
@@ -151,14 +150,14 @@
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Async Messaging \u2014 no event emission for state changes",
-      "description": "The service operates synchronously (API Gateway-Lambda-DynamoDB). No messaging infrastructure (SQS, SNS, EventBridge) is configured. Synchronous pattern is correct for the primary payments request path.",
-      "gap": "No event publication for payment state changes. Downstream services cannot subscribe to charge.created or refund.created events.",
-      "recommendation": "Add EventBridge event emission on successful charge creation and refund to enable downstream async consumption.",
+      "title": "No managed messaging; synchronous design is currently correct",
+      "description": "Archetype-calibrated against the stateful-crud rubric. All reads and writes are synchronous API Gateway to Lambda, which is correct for this surface. No SQS, SNS, EventBridge, Kinesis or MSK resources exist in infra/template.yaml, and no self-managed broker exists either. Scored 3 because no state change currently crosses a service boundary.",
+      "gap": "Ledger state changes emit no event, so a future settlement or notification consumer would have to poll the API.",
+      "recommendation": "Publish ChargeCreated/RefundCreated to EventBridge (or enable a DynamoDB stream) when the first consumer appears; do not introduce a broker before then.",
       "severity": "Low",
       "priority": "P2",
-      "effort": "Low",
-      "phase": 3,
+      "effort": "Medium",
+      "phase": 2,
       "evidence": {
         "file": "infra/template.yaml",
         "lines": null
@@ -175,13 +174,13 @@
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Network Security \u2014 no VPC endpoints or PrivateLink",
-      "description": "API Gateway enforces TLS 1.2+. S3 bucket denies non-TLS requests. Lambda uses AWS-managed networking. No VPC endpoints, PrivateLink, or VPC Lattice configured.",
-      "gap": "No managed networking services layered on. Lambda-to-DynamoDB traffic traverses AWS backbone without VPC endpoint.",
-      "recommendation": "Consider placing Lambda in a VPC with DynamoDB VPC endpoint for defense-in-depth if regulated payment data requires network-level isolation.",
+      "title": "Strong transport controls, no WAF or managed networking layer",
+      "description": "Serverless surface with no VPC attachment, so there are no security groups or 0.0.0.0/0 rules. Ingress is limited to a regional custom domain terminating TLS 1.2+ with ACM, the raw execute-api endpoint is unpublished, and ReceiptsBucketPolicy denies non-TLS and sub-TLS-1.2 requests with full public-access block.",
+      "gap": "No managed networking services (VPC endpoints/PrivateLink) and no WAF on the API; function egress is unrestricted.",
+      "recommendation": "Attach AWS WAF to the API stage with rate-based rules; if VPC egress is later required, use private subnets with VPC endpoints for DynamoDB and S3.",
       "severity": "Low",
       "priority": "P1",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "infra/template.yaml",
@@ -199,13 +198,13 @@
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Backup and Recovery \u2014 no cross-region replication or restore testing",
-      "description": "DynamoDB PITR enabled. S3 versioning enabled. No cross-region backup replication. No documented restore procedures. No AWS Backup plan.",
-      "gap": "Missing cross-region backup replication and documented restore procedures.",
-      "recommendation": "Add AWS Backup plan resource. Consider DynamoDB cross-region backup for DR. Document and test restore procedures.",
+      "title": "PITR and versioning enabled; no backup plan or restore drill",
+      "description": "The ledger has PointInTimeRecoveryEnabled: true and the receipts bucket has versioning enabled. No AWS::Backup::BackupPlan, no cross-region copy, and RUNBOOK.md documents no restore procedure or restore test.",
+      "gap": "Retention is limited to the PITR window with no long-term or cross-region copy, and the restore path has never been exercised.",
+      "recommendation": "Add an AWS Backup plan for the ledger with defined retention and cross-region copy, and document plus periodically exercise a restore procedure in RUNBOOK.md.",
       "severity": "Low",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "infra/template.yaml",
@@ -219,38 +218,14 @@
       }
     },
     {
-      "question_id": "INF-Q10",
-      "category": "Infrastructure & DevOps",
-      "category_display": "Infrastructure, Platform, and DevOps",
-      "category_id": "INF",
-      "title": "IaC Coverage \u2014 operational resources not codified",
-      "description": "SAM template defines compute, database, API, and storage. Missing from IaC: CloudWatch alarms, dashboards, backup plans. Approximately 70-80% IaC coverage.",
-      "gap": "Operational resources (alarms, dashboards, backup plans) are not in IaC.",
-      "recommendation": "Add CloudWatch alarms, dashboard, and AWS Backup plan resources to the SAM template. Target 90%+ IaC coverage.",
-      "severity": "Low",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 3,
-        "score_label": "Partial",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
-    },
-    {
       "question_id": "INF-Q11",
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "CI/CD Automation \u2014 no deploy stage",
-      "description": "GitHub Actions CI pipeline automates lint, type-check, OpenAPI validation, and pytest. No deploy stage exists \u2014 no sam deploy, no CodePipeline, no automated infrastructure deployment.",
-      "gap": "Build and test are automated but deployment is entirely manual.",
-      "recommendation": "Add deploy job to GitHub Actions using sam deploy with environment gates (staging-production). Consider CodePipeline for cross-account deployments.",
+      "title": "CI validates but never deploys; release is a manual sam deploy",
+      "description": "ci.yml runs ruff, mypy, OpenAPI spec validation and pytest on push and pull request, but contains no sam build, no deploy job, and no rollback stage. RUNBOOK.md documents deployment as an operator running sam build && sam deploy --config-env prod.",
+      "gap": "Application and IaC changes are validated automatically but released manually, so the pipeline is not the deployment path and releases are not auditable.",
+      "recommendation": "Add a deploy job gated on the existing checks, assuming a deploy role via GitHub OIDC and running sam build && sam deploy --no-confirm-changeset with CodeDeploy-managed rollback.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
@@ -271,16 +246,40 @@
       "category": "Application Architecture",
       "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "Async vs Sync \u2014 synchronous only, no event propagation",
-      "description": "All communication is synchronous request-response. For a stateful-crud payments service, the synchronous primary path is correct. No outbound service calls. No async event emission for downstream consumers.",
-      "gap": "No asynchronous state-change propagation for downstream services.",
-      "recommendation": "Add EventBridge event emission after successful state changes. The synchronous API response path should remain unchanged.",
+      "title": "All communication synchronous for a state-owning service",
+      "description": "Archetype-calibrated against the stateful-crud rubric, which expects async propagation of cross-service state changes at the top score; a stateless-utility would have been recorded Not Evaluated, but this service owns and mutates a ledger. Every path in handlers.py is synchronous request/response and no publish call or event source mapping exists in code or IaC.",
+      "gap": "No asynchronous propagation of ledger state changes, and background work such as receipt generation has nowhere to run off the request path.",
+      "recommendation": "Emit domain events to EventBridge on charge and refund commit and move receipt writing to an async consumer, keeping the read path synchronous.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/payments/handlers.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q4",
+      "category": "Application Architecture",
+      "category_display": "Application Architecture",
+      "category_id": "APP",
+      "title": "No long-running operations today, and no async job surface if one appears",
+      "description": "Archetype-calibrated against the stateful-crud rubric. Functions are capped at Timeout: 15 and every operation is a small number of DynamoDB calls, so nothing approaches 30 seconds. There is also no async job framework, status endpoint, or checkpointing available.",
+      "gap": "No job-status surface or checkpointing exists, so a future bulk reconcile or export would have to block the caller.",
+      "recommendation": "Implement any future bulk reconcile or export as an async job (Step Functions or an SQS worker) returning a job id with a status endpoint, rather than extending the function timeout.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
-        "file": "src/payments/handlers.py",
+        "file": "infra/template.yaml",
         "lines": null
       },
       "mod_metadata": {
@@ -295,21 +294,21 @@
       "category": "Application Architecture",
       "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "Service Discovery \u2014 DNS-based only, no dynamic discovery",
-      "description": "Service discoverable via custom domain backed by API Gateway. No dynamic service discovery (Cloud Map, service mesh). Relies on DNS plus SAM parameters.",
-      "gap": "No dynamic service discovery mechanism. If outbound service calls are added, hard-coded endpoints would emerge.",
-      "recommendation": "Current DNS-based discovery is appropriate. If outbound calls are added, adopt Cloud Map or SSM Parameter Store for endpoint resolution.",
-      "severity": "Low",
+      "title": "Dependencies wired through environment variables, no discovery",
+      "description": "Resource references are injected by SAM as environment variables (LEDGER_TABLE via !Ref LedgerTable, COGNITO_USER_POOL_ID via !Ref UserPoolId) and read with os.environ. There is no service registry or Cloud Map usage, and also no hardcoded endpoints.",
+      "gap": "Environment-variable wiring with no dynamic discovery; each additional dependency requires more per-function parameter plumbing.",
+      "recommendation": "Keep env-var injection for in-stack resources, which is the correct serverless pattern, and adopt AWS Cloud Map or SSM Parameter Store lookups only once cross-stack service-to-service calls appear.",
+      "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "infra/template.yaml",
         "lines": null
       },
       "mod_metadata": {
-        "internal_score": 3,
-        "score_label": "Partial",
+        "internal_score": 2,
+        "score_label": "Needs Work",
         "archetype_calibrated": false,
         "core_question": false
       }
@@ -319,13 +318,61 @@
       "category": "Data Platform",
       "category_display": "Data Platform Modernization",
       "category_id": "DATA",
-      "title": "Unstructured Data \u2014 S3 storage without parsing pipeline",
-      "description": "S3 bucket (ReceiptsBucket) for settlement receipts with KMS encryption, TLS enforcement, versioning. No automated parsing or extraction pipeline.",
-      "gap": "No automated parsing pipeline for receipt documents in S3.",
-      "recommendation": "If receipt analysis is needed, add Textract or Lambda trigger on S3 PutObject to extract and index receipt content.",
+      "title": "Receipts in S3 with no parsing or extraction pipeline",
+      "description": "Settlement receipts are stored in a managed S3 bucket (ReceiptsBucket) with KMS default encryption, versioning and full public-access block. No Textract call, document parser, or extraction pipeline exists anywhere in src/payments/.",
+      "gap": "Objects are stored but never parsed or indexed, so receipt contents are not searchable or analyzable.",
+      "recommendation": "Add an S3 event-triggered extraction step (Textract or a structured-JSON receipt writer) and catalog the output if receipts need to be queried.",
       "severity": "Low",
       "priority": "P1",
-      "effort": "Medium",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/template.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_display": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Encryption everywhere, but on AWS-managed keys with no rotation policy",
+      "description": "Both at-rest surfaces are encrypted: LedgerTable sets SSESpecification SSEEnabled true and ReceiptsBucket uses SSEAlgorithm aws:kms with BucketKeyEnabled. No AWS::KMS::Key is declared and no KMSMasterKeyId is set, so both rely on AWS-managed keys with no documented rotation policy.",
+      "gap": "No customer-managed key, so there is no control over key policy, grants, or rotation for payment data.",
+      "recommendation": "Create a customer-managed KMS key with rotation enabled and reference it from the table SSESpecification.KMSMasterKeyId and the bucket ServerSideEncryptionByDefault.KMSMasterKeyID.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/template.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_display": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No plaintext credentials anywhere; no managed store for future secrets",
+      "description": "No plaintext credential exists in the repository: no .env file, no password or api-key literals, no connection strings. Access is entirely IAM- and token-based (per-function DynamoDB read/write policies, OAuth2 bearer tokens that the code never persists or logs) and resource ids come from !Ref parameters. No Secrets Manager resource exists because the service currently holds no long-lived secret.",
+      "gap": "No managed secret store or rotation is in place for the day a payment-provider credential or webhook signing key is introduced.",
+      "recommendation": "Introduce AWS Secrets Manager with automatic rotation before the first provider credential or signing key is added, keeping non-secret resource ids in plain environment variables.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "infra/template.yaml",
@@ -343,10 +390,10 @@
       "category": "Security Baseline",
       "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "Compute Hardening \u2014 no proactive vulnerability scanning",
-      "description": "Lambda managed runtime handles OS patching. Dependabot configured for weekly dependency updates. No active vulnerability scanning (Inspector, Snyk, Bandit) in CI.",
-      "gap": "No proactive vulnerability scanning beyond Dependabot's reactive CVE detection.",
-      "recommendation": "Add pip-audit or Snyk to CI pipeline. Consider AWS Inspector for Lambda runtime assessment.",
+      "title": "Dependency patching automated; no vulnerability scanning",
+      "description": "dependabot.yml tracks pip and github-actions weekly with security labels. The runtime is an AWS-managed Lambda base (python3.12, arm64), so there is no AMI or container image to harden. No Inspector, no image scanning, and no SAST gate exist.",
+      "gap": "Patch automation covers declared dependencies only; no vulnerability scanning is integrated into the pipeline.",
+      "recommendation": "Enable Amazon Inspector Lambda scanning for the functions and add pip-audit to the CI workflow so advisories block a merge rather than arriving only as a pull request.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Low",
@@ -367,10 +414,10 @@
       "category": "Security Baseline",
       "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "Security Pipeline \u2014 dependency scanning only, no SAST",
-      "description": "Dependabot configured for dependency scanning. CI runs ruff and mypy but no SAST tool. No security gate blocking on critical findings.",
-      "gap": "No SAST tool covering application code vulnerabilities.",
-      "recommendation": "Add Bandit or Semgrep to CI pipeline as a required check blocking on high-severity findings.",
+      "title": "Dependency scanning only; no SAST and no blocking security gate",
+      "description": "Dependency scanning runs via Dependabot and CI enforces ruff, mypy --strict and OpenAPI validation, but ci.yml contains no SAST tool, no pip-audit, and no step that fails the build on a security finding.",
+      "gap": "No static application security testing in the pipeline and no gate that blocks on a critical advisory.",
+      "recommendation": "Add a SAST step (bandit or Semgrep) and pip-audit to ci.yml, failing the job on high or critical findings.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -391,21 +438,21 @@
       "category": "Operations & Observability",
       "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "SLO Definitions \u2014 none defined",
-      "description": "No SLO definitions. No CloudWatch alarms on latency or error rate. No error budget tracking. No alarm resources in SAM template.",
-      "gap": "No formal SLOs for this payment-critical service.",
-      "recommendation": "Define SLOs: availability 99.95%, latency p99 < 500ms. Implement CloudWatch alarms. Track error budgets.",
+      "title": "Alarm thresholds documented in prose, no SLOs or error budget",
+      "description": "RUNBOOK.md documents threshold alarms (payments-5xx above 1 percent over 5 minutes, payments-idempotency-conflict above 10 per minute, payments-ddb-throttle on any) and a payments-prod dashboard tracking p50/p99 latency and 4xx/5xx. No AWS::CloudWatch::Alarm resource exists in IaC and no named SLO, target, or error budget is defined.",
+      "gap": "Service levels are prose-only rather than declared in IaC, and no error budget is tracked.",
+      "recommendation": "Declare the runbook thresholds as CloudWatch alarms in the SAM template and define explicit availability and latency SLOs with error-budget tracking for the charge and refund journeys.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "infra/template.yaml",
+        "file": "RUNBOOK.md",
         "lines": null
       },
       "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
+        "internal_score": 2,
+        "score_label": "Needs Work",
         "archetype_calibrated": false,
         "core_question": false
       }
@@ -415,10 +462,10 @@
       "category": "Operations & Observability",
       "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Business Metrics \u2014 partial coverage",
-      "description": "ChargeCreated metric published via Lambda Powertools. Structured logging with business context. Not systematic across all features (no RefundCreated, no amount metrics, no dashboard).",
-      "gap": "Business metrics not systematic. Missing RefundCreated, amount metrics, dashboard.",
-      "recommendation": "Add metrics for all business events. Create CloudWatch dashboard with business and infrastructure metrics.",
+      "title": "One business metric published; refunds and conflicts unmeasured",
+      "description": "Powertools Metrics is configured with namespace Payments and create_charge emits a ChargeCreated count metric. refund_charge emits no metric and there is no metric for idempotency conflicts or refund volume, even though RUNBOOK.md alarms on conflicts.",
+      "gap": "Business metric coverage is partial, so one documented alarm has no emitted metric behind it.",
+      "recommendation": "Emit RefundCreated and IdempotencyConflict metrics, plus charge amount by currency, so the documented alarms and dashboard are backed by published metrics.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Low",
@@ -439,112 +486,16 @@
       "category": "Operations & Observability",
       "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Anomaly Detection and Alerting \u2014 none configured",
-      "description": "No CloudWatch alarms. No anomaly detection. No alerting on error rates or latency. No notification integration.",
-      "gap": "Complete absence of alerting for a payment-critical service.",
-      "recommendation": "Add CloudWatch alarms for Lambda errors, duration p99, DynamoDB throttles, API Gateway 5xx. Enable anomaly detection on error rates. Configure SNS notifications.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
-    },
-    {
-      "question_id": "OPS-Q5",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "Deployment Strategy \u2014 direct-to-production, no staged rollout",
-      "description": "No deployment strategy configured. No Lambda traffic shifting. No CodeDeploy. No canary or blue/green. CI has no deploy stage. Releases go direct-to-production.",
-      "gap": "Direct-to-production deployment with no staged rollout or automatic rollback.",
-      "recommendation": "Add AutoPublishAlias and DeploymentPreference (Canary10Percent5Minutes) to Lambda functions with CloudWatch alarm-triggered rollback.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
-    },
-    {
-      "question_id": "OPS-Q6",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "Integration Testing \u2014 unit tests only",
-      "description": "Only unit/contract tests exist (test_idempotency.py, 3 tests). Uses ledger_stub fixture. No integration tests against DynamoDB Local or live endpoints. No API contract tests.",
-      "gap": "No integration tests validating full Lambda-DynamoDB path or API Gateway configuration.",
-      "recommendation": "Add integration tests using DynamoDB Local or moto. Add API contract tests validating responses against OpenAPI spec. Run before deploy.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "tests/test_idempotency.py",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
-    },
-    {
-      "question_id": "OPS-Q7",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "Incident Response \u2014 no runbooks or automation",
-      "description": "No runbooks in repository. No SSM Automation documents. No self-healing patterns. External runbook URL referenced but no content in repo.",
-      "gap": "Complete absence of incident response automation.",
-      "recommendation": "Create SSM Automation documents for common incidents (throttling, timeout spikes, elevated 5xx). Start with markdown runbooks documenting investigation steps.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "openapi/payments.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
-    },
-    {
-      "question_id": "OPS-Q8",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "Observability Ownership \u2014 no dashboards or alarm ownership",
-      "description": "Logging, tracing, and metrics instrumented but no dashboards defined in IaC. No alarm ownership. No CODEOWNERS. Powertools service name provides implicit ownership.",
-      "gap": "Observability exists but lacks formal ownership structure and dashboards.",
-      "recommendation": "Add CloudWatch dashboard to SAM template. Add CODEOWNERS file. Tag monitoring resources with team ownership.",
+      "title": "Static threshold alarms only",
+      "description": "Alerting consists of the three fixed-threshold alarms described in RUNBOOK.md with a page-on-call action. No CloudWatch anomaly detection, no composite alarm, and no alarm resources in infra/template.yaml.",
+      "gap": "Fixed thresholds miss gradual degradation and novel failure modes on a payment path.",
+      "recommendation": "Add CloudWatch anomaly detection bands on API latency and 5xx rate plus a composite alarm combining error rate with DynamoDB throttles, all declared in the SAM template.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "src/payments/app.py",
+        "file": "RUNBOOK.md",
         "lines": null
       },
       "mod_metadata": {
@@ -555,14 +506,110 @@
       }
     },
     {
+      "question_id": "OPS-Q5",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Direct-to-production releases with manual rollback",
+      "description": "RUNBOOK.md describes deployment as sam deploy --config-env prod with rollback by redeploying the previous immutable artifact. The template declares no AutoPublishAlias, no DeploymentPreference and no CodeDeploy configuration, so each release replaces the live version for all traffic with no canary and no alarm-triggered automatic rollback.",
+      "gap": "No traffic shifting and no automated rollback, so a regression reaches all payment traffic and recovery depends on a human redeploy.",
+      "recommendation": "Add AutoPublishAlias: live with DeploymentPreference Type Canary10Percent5Minutes and Alarms referencing the 5xx and idempotency-conflict alarms so a bad release rolls back automatically.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/template.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Handler-level behavior tests in CI; nothing against a deployed stage",
+      "description": "tests/test_idempotency.py exercises the critical behaviors through the handler against a DynamoDB Local stub (retry does not double-charge, key reuse with a different body returns 409, missing scope is denied) and runs on every push and pull request alongside OpenAPI validation. Coverage stops at the handler boundary.",
+      "gap": "No post-deploy or contract test against the real API Gateway and authorizer path, so gateway and auth integration regressions are not caught.",
+      "recommendation": "Add a post-deploy smoke and contract test against the v1 stage covering a real token, an idempotent retry, and the 409 path, as a pipeline stage after the deploy job.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "tests/test_idempotency.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Detailed runbook, but no automated remediation",
+      "description": "RUNBOOK.md is specific and operationally useful: dashboards, an alarm/threshold/action table, deploy and rollback commands, common operations including webhook replay, and a three-step escalation path. It is human-readable documentation only; no SSM Automation document, remediation Lambda, or self-healing workflow exists in IaC.",
+      "gap": "Every documented response step is executed manually; nothing is machine-executable or versioned as automation.",
+      "recommendation": "Convert the highest-frequency procedures such as webhook replay and idempotency-conflict triage into SSM Automation documents in IaC, and wire the 5xx alarm to an automated first-response action.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "RUNBOOK.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Dashboards and alarms exist; ownership is informal",
+      "description": "A per-service dashboard (payments-prod), a named X-Ray service map, and three named alarms exist with a defined escalation target (Payments Platform), and the OpenAPI contact block names that team with a runbook URL. There is no CODEOWNERS file, no owner tag on observability resources, and the dashboard and alarms are not in IaC.",
+      "gap": "Ownership is documented informally rather than enforced through CODEOWNERS or team tags on observability assets.",
+      "recommendation": "Add a CODEOWNERS file covering infra/ and RUNBOOK.md, and tag dashboards and alarms with the owning team once they are declared in IaC.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "RUNBOOK.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
       "question_id": "OPS-Q9",
       "category": "Operations & Observability",
       "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Resource Tagging \u2014 no tags on any resources",
-      "description": "No tags on any AWS resources in the SAM template. No Tags property on Lambda, DynamoDB, S3, or API Gateway. No tagging standard.",
-      "gap": "Complete absence of resource tagging.",
-      "recommendation": "Add Tags to SAM Globals or each resource: Environment, Service, Team, CostCenter.",
+      "title": "No tags on any provisioned resource",
+      "description": "infra/template.yaml provisions six resources (three Lambda functions, the API, the DynamoDB table, and the receipts bucket with its policy) and declares no Tags on any of them and no Globals.Function.Tags. There is no tagging standard, no Config rule, and not even a Name or owner tag.",
+      "gap": "No cost-allocation, ownership, or environment tags on a payment-critical stack, so spend cannot be attributed and incident ownership cannot be resolved from the resource.",
+      "recommendation": "Add Globals.Function.Tags plus per-resource Tags with consistent keys (Service, Owner, Environment, CostCenter) and enforce them with an AWS Config required-tags rule and an Organizations Tag Policy.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -586,7 +633,7 @@
       "title": "Managed Compute",
       "status": "pass",
       "score": 4,
-      "reason": "All compute on Lambda (serverless, ARM64). No EC2."
+      "reason": "Score 4 - all compute is serverless Lambda (python3.12/arm64); no EC2 resources exist."
     },
     {
       "question_id": "INF-Q2",
@@ -594,7 +641,7 @@
       "title": "Managed Databases",
       "status": "pass",
       "score": 4,
-      "reason": "DynamoDB fully managed with PAY_PER_REQUEST, PITR, SSE."
+      "reason": "Score 4 - single managed DynamoDB table on PAY_PER_REQUEST with TTL, PITR and SSE; no self-managed engine."
     },
     {
       "question_id": "INF-Q6",
@@ -602,7 +649,7 @@
       "title": "API Entry Point",
       "status": "pass",
       "score": 4,
-      "reason": "API Gateway with OAuth2 authorizer, custom domain, TLS 1.2, OpenAPI validation."
+      "reason": "Score 4 - API Gateway REST API with default Lambda authorizer and contract-first request validation from the OpenAPI spec."
     },
     {
       "question_id": "INF-Q7",
@@ -610,7 +657,7 @@
       "title": "Auto-Scaling",
       "status": "pass",
       "score": 4,
-      "reason": "Lambda inherent auto-scaling + DynamoDB PAY_PER_REQUEST."
+      "reason": "Score 4 - Lambda concurrency and DynamoDB on-demand scale automatically; no static capacity to tune."
     },
     {
       "question_id": "INF-Q9",
@@ -618,7 +665,15 @@
       "title": "High Availability and Fault Isolation",
       "status": "pass",
       "score": 4,
-      "reason": "Lambda, DynamoDB, API Gateway all inherently multi-AZ."
+      "reason": "Score 4 - all components (Lambda, API Gateway, DynamoDB) are regional multi-AZ managed services."
+    },
+    {
+      "question_id": "INF-Q10",
+      "category_id": "INF",
+      "title": "Infrastructure as Code Coverage",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 - every exposed surface (compute, API, data, identity wiring) is declared in infra/template.yaml; the stack is the documented source of truth."
     },
     {
       "question_id": "APP-Q1",
@@ -626,7 +681,7 @@
       "title": "Programming Languages",
       "status": "pass",
       "score": 4,
-      "reason": "Python 3.12 with boto3 and aws-lambda-powertools \u2014 modern cloud-native stack."
+      "reason": "Score 4 - Python 3.12 with boto3 >=1.34, aws-lambda-powertools >=2.30 and mypy strict; runtime, framework and SDK all current."
     },
     {
       "question_id": "APP-Q2",
@@ -634,15 +689,7 @@
       "title": "Monolith vs Microservices",
       "status": "pass",
       "score": 4,
-      "reason": "Single-responsibility microservice with clear API contract and own database."
-    },
-    {
-      "question_id": "APP-Q4",
-      "category_id": "APP",
-      "title": "Long-Running Process Handling",
-      "status": "pass",
-      "score": 4,
-      "reason": "All operations are fast DynamoDB reads/writes well under 15s Lambda timeout."
+      "reason": "Score 4 - independently deployable per-operation functions with least-privilege roles and explicit, non-circular module boundaries."
     },
     {
       "question_id": "APP-Q5",
@@ -650,7 +697,7 @@
       "title": "API Versioning Strategy",
       "status": "pass",
       "score": 4,
-      "reason": "Consistent /v1/ URL path versioning with OpenAPI spec version tracking."
+      "reason": "Score 4 - single consistent scheme: v1 stage and URL path, OpenAPI server path and info.version aligned with the package version, spec validated in CI, closed schemas."
     },
     {
       "question_id": "DATA-Q2",
@@ -658,7 +705,7 @@
       "title": "Unified Data Access Layer",
       "status": "pass",
       "score": 4,
-      "reason": "All access through single DynamoDB table via centralized _table object in app.py."
+      "reason": "Score 4 - one module owns the DynamoDB client and the only write path; no other module imports boto3."
     },
     {
       "question_id": "DATA-Q3",
@@ -666,7 +713,7 @@
       "title": "Database Engine Version and EOL",
       "status": "pass",
       "score": 4,
-      "reason": "DynamoDB is serverless \u2014 no engine version to manage, not subject to EOL."
+      "reason": "Score 4 - DynamoDB is versionless and managed with no EOL exposure; the table is fully declared in IaC and the Lambda runtime is pinned."
     },
     {
       "question_id": "DATA-Q4",
@@ -674,23 +721,7 @@
       "title": "Stored Procedures and Schema Complexity",
       "status": "pass",
       "score": 4,
-      "reason": "No stored procedures or proprietary SQL. DynamoDB NoSQL with all logic in application layer."
-    },
-    {
-      "question_id": "SEC-Q1",
-      "category_id": "SEC",
-      "title": "Audit Logging",
-      "status": "not_evaluated_surface_flag",
-      "score": null,
-      "reason": "Application-level IaC only (Lambda, DynamoDB, S3, API Gateway). CloudTrail is an account-level concern belonging in foundation infrastructure repo."
-    },
-    {
-      "question_id": "SEC-Q2",
-      "category_id": "SEC",
-      "title": "Encryption at Rest",
-      "status": "pass",
-      "score": 4,
-      "reason": "DynamoDB SSE enabled. S3 KMS encryption with BucketKeyEnabled."
+      "reason": "Score 4 - no SQL files, stored procedures, triggers or proprietary dialects; all business logic is in the application layer."
     },
     {
       "question_id": "SEC-Q3",
@@ -698,7 +729,7 @@
       "title": "API Authentication",
       "status": "pass",
       "score": 4,
-      "reason": "OAuth2 Lambda authorizer on all endpoints with scope-based authorization."
+      "reason": "Score 4 - DefaultAuthorizer applies OAuth2 client-credentials validation to every route, with per-operation scopes re-checked in handlers and covered by a test."
     },
     {
       "question_id": "SEC-Q4",
@@ -706,15 +737,7 @@
       "title": "Centralized Identity Integration",
       "status": "pass",
       "score": 4,
-      "reason": "Cognito integration for OAuth2 client-credentials M2M authentication."
-    },
-    {
-      "question_id": "SEC-Q5",
-      "category_id": "SEC",
-      "title": "Secrets Management",
-      "status": "pass",
-      "score": 4,
-      "reason": "No hardcoded credentials. Environment variables contain only non-secret configuration."
+      "reason": "Score 4 - tokens are issued and validated against Cognito; no local user store or password handling exists."
     },
     {
       "question_id": "OPS-Q1",
@@ -722,7 +745,15 @@
       "title": "Distributed Tracing",
       "status": "pass",
       "score": 4,
-      "reason": "X-Ray tracing with Powertools Tracer and X-Correlation-Id propagation."
+      "reason": "Score 4 - X-Ray active on all functions and the API, Powertools Tracer instrumentation, and an X-Correlation-Id propagated into logs and every response."
+    },
+    {
+      "question_id": "SEC-Q1",
+      "category_id": "SEC",
+      "title": "Audit Logging",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "Surface gate: has_iac_provisioning_aws_resources is true but the IaC is application-level only (functions, API, table, bucket) with no account/foundation resources. CloudTrail is provisioned once per account or organization and belongs in the foundation infrastructure repo."
     }
   ],
   "pathways": [
@@ -732,15 +763,26 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "APP-Q2 = 4 \u2014 already a well-decomposed microservice with clear boundaries",
+      "key_trigger_criteria": "Primary: APP-Q2 < 3, plus at least one of INF-Q1 < 3, APP-Q3 < 3, APP-Q4 < 3.",
       "triggering_questions": [
         {
           "question_id": "APP-Q2",
           "score": 4,
-          "note": "APP-Q2 = 4 meets threshold; already microservice architecture"
+          "note": "APP-Q2 = 4; already independently deployable serverless functions, primary trigger not met"
+        },
+        {
+          "question_id": "INF-Q1",
+          "score": 4,
+          "note": "INF-Q1 = 4; compute already Lambda"
+        },
+        {
+          "question_id": "APP-Q3",
+          "score": 2,
+          "note": "Supporting condition met but primary not met, so pathway does not fire"
         }
       ],
-      "detail": null
+      "detail": null,
+      "not_triggered_reason": "Primary trigger APP-Q2 < 3 is not met: the service is already decomposed into per-operation Lambda functions."
     },
     {
       "id": "move-to-containers",
@@ -748,16 +790,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "INF-Q1 = 4 \u2014 compute already on Lambda (serverless); contextual guard blocks containerization pathway",
+      "key_trigger_criteria": "Primary: INF-Q1 < 3 AND no container definitions found.",
       "triggering_questions": [
         {
           "question_id": "INF-Q1",
           "score": 4,
-          "note": "INF-Q1 = 4; compute is already Lambda/serverless"
+          "note": "INF-Q1 = 4; all compute on Lambda"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "Workload already runs on Lambda (serverless); container pathway does not apply"
+      "not_triggered_reason": "Contextual guard applies: compute already runs on Lambda, so containerization is not the modernization step."
     },
     {
       "id": "move-to-open-source",
@@ -765,15 +807,21 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "DATA-Q4 = 4 \u2014 no stored procedures or proprietary SQL; DynamoDB is not a commercial DB engine",
+      "key_trigger_criteria": "Primary: DATA-Q4 < 3 AND commercial DB engines detected.",
       "triggering_questions": [
         {
           "question_id": "DATA-Q4",
           "score": 4,
-          "note": "DATA-Q4 = 4; no proprietary SQL or stored procedures"
+          "note": "DATA-Q4 = 4; no stored procedures or proprietary SQL"
+        },
+        {
+          "question_id": "INF-Q2",
+          "score": 4,
+          "note": "DynamoDB only; no commercial engine detected"
         }
       ],
-      "detail": null
+      "detail": null,
+      "not_triggered_reason": "No proprietary SQL and no licensed database engine exist in the repository."
     },
     {
       "id": "move-to-managed-databases",
@@ -781,15 +829,21 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "INF-Q2 = 4 \u2014 DynamoDB is already a fully managed database",
+      "key_trigger_criteria": "Primary: INF-Q2 < 3.",
       "triggering_questions": [
         {
           "question_id": "INF-Q2",
           "score": 4,
-          "note": "INF-Q2 = 4; database already fully managed"
+          "note": "INF-Q2 = 4; DynamoDB on-demand is fully managed"
+        },
+        {
+          "question_id": "DATA-Q3",
+          "score": 4,
+          "note": "DATA-Q3 = 4; versionless managed engine, no EOL exposure"
         }
       ],
-      "detail": null
+      "detail": null,
+      "not_triggered_reason": "The only datastore is already a fully managed service."
     },
     {
       "id": "move-to-managed-analytics",
@@ -797,16 +851,21 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "INF-Q4 = 3 (threshold not met); no data processing workloads exist in this service",
+      "key_trigger_criteria": "Primary: INF-Q4 < 3, with evidence of data processing workloads required by the guard.",
       "triggering_questions": [
         {
           "question_id": "INF-Q4",
           "score": 3,
-          "note": "INF-Q4 = 3 meets threshold; additionally no data processing workloads exist"
+          "note": "INF-Q4 = 3 meets threshold; synchronous design is correct for this archetype"
+        },
+        {
+          "question_id": "DATA-Q2",
+          "score": 4,
+          "note": "Unified data access layer; no data source sprawl"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "No streaming, ETL, data pipeline, or analytics artifacts found. Service is a CRUD payments API with no data processing responsibilities."
+      "not_triggered_reason": "Contextual guard applies: no streaming, ETL, pipeline or analytics artifacts were found, and INF-Q4 meets the threshold."
     },
     {
       "id": "move-to-modern-devops",
@@ -814,38 +873,38 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q11 = 2 (< 3); supported by OPS-Q5 = 1 (< 3), OPS-Q6 = 1 (< 3)",
+      "key_trigger_criteria": "Primary: INF-Q10 < 3 OR INF-Q11 < 3. INF-Q11 = 2 fired the pathway; OPS-Q5 = 2 strengthens it.",
       "triggering_questions": [
         {
           "question_id": "INF-Q11",
           "score": 2,
-          "note": "Primary trigger: CI pipeline has no deploy stage"
+          "note": "Primary - CI validates and tests but has no build, deploy or rollback stage"
         },
         {
           "question_id": "OPS-Q5",
-          "score": 1,
-          "note": "Supporting: no staged deployment strategy"
-        },
-        {
-          "question_id": "OPS-Q6",
-          "score": 1,
-          "note": "Supporting: no integration tests in CI"
+          "score": 2,
+          "note": "Supporting - direct-to-production releases with manual rollback"
         }
       ],
       "detail": {
-        "current_state": "CI pipeline automates lint/test/validate only. No deploy automation. No staged rollout. No integration tests.",
-        "recommended_services": [
-          "CodePipeline",
-          "CodeBuild",
-          "CodeDeploy (Lambda)",
-          "CloudFormation (SAM)",
-          "CloudWatch Alarms"
-        ],
+        "iac_coverage": "INF-Q10 = 4; the full stack is declared in infra/template.yaml and is the documented source of truth, so IaC is not the gap.",
+        "cicd_state": "ci.yml runs ruff, mypy, OpenAPI validation and pytest on push/PR with no deploy or rollback stage; deployment is a manual sam deploy per RUNBOOK.md.",
+        "deployment_gap": "No AutoPublishAlias, DeploymentPreference or CodeDeploy configuration; releases replace the live version for all traffic.",
+        "testing_gap": "OPS-Q6 = 3; handler-level idempotency and scope tests run in CI, but nothing exercises a deployed stage.",
         "immediate_actions": [
-          "Add sam deploy stage to GitHub Actions with staging/production gates",
-          "Configure Lambda DeploymentPreference for canary deployments",
-          "Add integration tests with DynamoDB Local before deploy",
-          "Add CloudWatch alarms to enable automatic rollback"
+          "Add an OIDC-authenticated deploy job gated on the existing CI checks.",
+          "Add AutoPublishAlias: live with a Canary10Percent5Minutes DeploymentPreference and alarm-triggered rollback.",
+          "Promote the RUNBOOK.md alarm table into AWS::CloudWatch::Alarm resources in the SAM template.",
+          "Add a post-deploy smoke/contract test against the v1 stage.",
+          "Add required tags to all resources (OPS-Q9) as part of the same IaC pass."
+        ],
+        "aws_services": [
+          "AWS CodePipeline",
+          "AWS CodeBuild",
+          "AWS CodeDeploy (Lambda traffic shifting)",
+          "AWS SAM / CloudFormation",
+          "Amazon CloudWatch",
+          "AWS X-Ray"
         ],
         "learning_materials": [
           "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
@@ -859,11 +918,12 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)",
+      "key_trigger_criteria": "Primary: no AI/agent frameworks detected. Guard requires AI/agent/LLM intent evidenced in the repository.",
       "triggering_questions": [],
       "detail": null,
       "not_triggered_reason": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)."
     }
   ],
+  "decomposition_strategy": null,
   "repo_name": "modern-payments-api"
 }

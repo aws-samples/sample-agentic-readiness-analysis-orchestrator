@@ -96,20 +96,20 @@ Verify each service entry's:
 
 ### 5. Program Recommendations — JUDGE WHETHER THE SELECTION MADE SENSE
 
-‼ **THE FULL CANDIDATE SET IS BELOW — ALL 39 PROGRAMS, BAKED IN.** This prompt is
+‼ **THE FULL CANDIDATE SET IS BELOW — ALL 40 PROGRAMS, BAKED IN.** This prompt is
 self-contained by contract: the grader does not read `SKILL.md` or any TD reference file at runtime,
 so the programs have to be here rather than pointed at.
 
 ‼ **AND THAT IS A FIX, NOT A CONVENIENCE.** This section used to list THREE programs with their
 triggers and instruct that "a program recommended without its trigger being met is a defect". The
-library holds 39. So a portfolio TD correctly recommending any of the other 36 met a grader with no
+library holds 40. So a portfolio TD correctly recommending any of the other 37 met a grader with no
 trigger to check it against, and by that rule had to be marked a defect — it penalised the right
 answer. Our own committed portfolio golden recommends four programs and the prompt knew one of them.
 
 Each row's "surface when" is the FIRST condition from the library's `Signal patterns` — enough to
 decide whether a recommendation is grounded. Note the library's richer fields (`How to evaluate`,
-`DO NOT recommend when`, `Prerequisite`) are NOT reproduced here: `How to evaluate` exists on only 3
-of 39 entries, and the rest would triple this prompt's length. Where a row's condition is
+`DO NOT recommend when`, `Prerequisite`) are NOT reproduced here: `How to evaluate` exists on only 4
+of 40 entries, and the rest would triple this prompt's length. Where a row's condition is
 insufficient to judge, say the evidence is inconclusive rather than assuming a defect.
 
 | Program | Tag | Status | Surface when (first condition) |
@@ -117,6 +117,7 @@ insufficient to judge, say the evidence is inconclusive rather than assuming a d
 | AI DLC (AI Driven Development Lifecycle) | `[ARA-anchor]` | Active | Portfolio shows teams without established AI-assisted development practices, or engineering-maturity findings indicate manual development workflows th |
 | AXE (Agent Experience Engagement) | `[ARA-anchor]` | Active | Portfolio shows 3+ services in `Pilot-Ready` or `Agent-Ready` state, or business has defined customer/employee experience goals but lacks a technical |
 | Innovation EBA (AIML-GenAI) | `[ARA-anchor]` | Active | Portfolio `context` indicates AI/ML or GenAI is a strategic imperative, executive sponsorship exists, use cases deliver critical business value, a dat |
+| FORGE Data Platform Readiness Assessment | `[ARA]` | Active | One or more data-serving services have a unified High finding in Data Accessibility or Authentication & Authorization, and the cause is in the data platform rather than the service code |
 | OLA (Optimization & Licensing Assessment) | `[MOD]` | Active | MOD findings indicate on-prem workloads needing migration; |
 | OLA for Databases | `[MOD]` | Active | MOD `Move to Managed Databases` pathway triggered; |
 | OLA for VMware | `[MOD]` | Active | VMware infrastructure detected in portfolio `context`; |
@@ -154,7 +155,7 @@ insufficient to judge, say the evidence is inconclusive rather than assuming a d
 | AWS Skill Builder | `[ARA+MOD]` | Active | ARA `Engineering Maturity` dimension has findings indicating team skill gaps; |
 | Public Workshop Catalog (Self-Paced) | `[ARA+MOD]` | Active | MOD findings show specific technology pathways; |
 
-All 39 are `Active` as of 2026-09-28. A `Retiring` program must never be recommended, and a
+All 40 are `Active` as of 2026-10-12. A `Retiring` program must never be recommended, and a
 `Pilot` one must carry its region/segment caveat — neither status is present today, so if you see one
 the table is stale and that itself is worth reporting.
 

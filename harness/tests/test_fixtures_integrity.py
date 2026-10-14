@@ -216,3 +216,45 @@ if __name__ == "__main__":
                 fails += 1
                 print(f"FAIL {name}\n     {exc}")
     sys.exit(1 if fails else 0)
+
+
+# ---------------------------------------------------------------------------------------
+# Goldens must carry no absolute generation path.
+#
+# A CI-generated golden records wherever it was produced. On a GitLab runner that is
+# /builds/<group>/<project>/..., which is an internal host path and unpublishable — the
+# 2026-10-13 re-baseline landed five such goldens on main, and the MIRROR SCAN was the
+# only thing that caught them, one step before publication. That is too late to be the
+# first line of defence, hence this test.
+#
+# The fields involved (`repo_path`, `target_path`) are incidental metadata, not part of
+# the output contract — one golden already carries `repo_path: null` — so stripping the
+# prefix to a repo-relative path loses nothing a consumer depends on.
+# ---------------------------------------------------------------------------------------
+def test_goldens_carry_no_absolute_generation_path():
+    import json as _json
+    offenders = []
+    for p in sorted((REPO / "harness" / "golden").glob("*.json")):
+        raw = p.read_text()
+        for marker in ("/builds/", "/Users/", "/home/", "/workplace/"):
+            if marker in raw:
+                hits = []
+
+                def _walk(o, path=""):
+                    if isinstance(o, dict):
+                        for k, v in o.items():
+                            if isinstance(v, str) and v.startswith(marker):
+                                hits.append(f"{path}.{k}")
+                            else:
+                                _walk(v, f"{path}.{k}")
+                    elif isinstance(o, list):
+                        for i, v in enumerate(o):
+                            _walk(v, f"{path}[{i}]")
+
+                _walk(_json.loads(raw))
+                if hits:
+                    offenders.append(f"{p.name}: {marker} at {', '.join(hits[:4])}")
+    assert not offenders, (
+        "golden reports contain absolute generation paths — these leak the machine or CI "
+        "runner they were produced on and must be made repo-relative before the baseline "
+        "is committed:\n  " + "\n  ".join(offenders))

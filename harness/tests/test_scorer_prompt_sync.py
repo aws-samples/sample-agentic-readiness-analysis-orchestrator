@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Tests for scorer-prompt-sync.py — the drift gate between the TD and the EXTERNAL Benchmark
-scorer prompts (harness/rubric/{ara,mod}-scorer-prompt.md).
+scorer prompts (harness/rubric/{ara,mod}-scorer-prompt.md and the portfolio pair).
 
 WHY THIS MATTERS
 The in-repo grader (score-reports.py) parses the TD on every run, so it can never go stale.
@@ -129,6 +129,76 @@ def test_diff_flags_added_and_removed_keys():
     assert any(l.strip().startswith("+ b") for l in lines)
     lines = sps._diff({"a": 1, "b": 2}, {"a": 1})
     assert any(l.strip().startswith("- b") for l in lines)
+
+
+
+# ---------------------------------------------------------------------------------------
+# Portfolio prompts: the program candidate set.
+#
+# These tests exist because the portfolio pair was NOT covered here or in the sync script.
+# run() iterated ("ara", "mod"), so both portfolio prompts and their lock files went
+# unread for ~8 weeks; the locks carried "fingerprint": "stub-v1-2026-08-18" and a
+# hand-typed list of 3 program names against a library of 40. Every program-library edit
+# in that window -- including the one that added FORGE -- passed CI clean.
+# ---------------------------------------------------------------------------------------
+def test_programs_are_derived_from_the_library_not_hardcoded():
+    """The parse must find the real set. A hand-maintained list is the original bug."""
+    programs = sps.derive_programs()
+    assert len(programs) >= 40, f"expected the full library, got {len(programs)}"
+    # Section headings carry no `[TAG]` and must not be mistaken for programs.
+    for heading in ("Status Key", "Workload-Specific Programs", "ISV/Partner Programs",
+                    "Mapping findings to triggers — vocabulary alignment"):
+        assert heading not in programs, f"section heading parsed as a program: {heading}"
+    for name, meta in programs.items():
+        assert meta["tag"] in {"ARA", "MOD", "ARA+MOD", "ARA-anchor"}, (name, meta)
+        assert meta["status"] in {"Active", "Retiring", "Retired"}, (name, meta)
+
+
+def test_every_library_program_appears_in_both_portfolio_prompts():
+    """The load-bearing assertion. The portfolio prompts are self-contained by contract,
+    so a program the library defines and the prompt omits is one the grader will score as
+    a defect when the TD correctly recommends it."""
+    programs = sps.derive_programs()
+    for analysis, path in sps.PORTFOLIO_PROMPT.items():
+        missing = sps.missing_programs(path, programs)
+        assert not missing, (
+            f"{path.name} is missing {len(missing)} program(s): {missing}. "
+            f"Add a row to the candidate table, then re-publish the scorer.")
+
+
+def test_missing_program_is_detected():
+    """Negative control: without this, the check above could pass vacuously."""
+    programs = dict(sps.derive_programs())
+    programs["Nonexistent Program That Is Not In Any Prompt"] = {"tag": "ARA",
+                                                                 "status": "Active"}
+    for path in sps.PORTFOLIO_PROMPT.values():
+        assert "Nonexistent Program That Is Not In Any Prompt" in sps.missing_programs(
+            path, programs)
+
+
+def test_committed_portfolio_locks_are_in_sync_with_the_library():
+    """Fails the moment the library is edited without re-running --write."""
+    facts = sps.portfolio_facts()
+    for analysis, lock_path in sps.PORTFOLIO_LOCK.items():
+        assert lock_path.exists(), f"missing portfolio lock {lock_path.name}"
+        committed = json.loads(lock_path.read_text())
+        assert committed.get("facts") == facts, (
+            f"{lock_path.name} drifted from the program library — run "
+            f"`python3 harness/scorer-prompt-sync.py --write` and re-publish the scorer.")
+        assert not committed["fingerprint"].startswith("stub-"), (
+            f"{lock_path.name} still carries a stub fingerprint — it was never generated "
+            f"from real facts.")
+
+
+def test_portfolio_prompt_program_row_count_matches_the_library():
+    """The prompt states its own count in prose; a mismatch misleads the grader."""
+    programs = sps.derive_programs()
+    for path in sps.PORTFOLIO_PROMPT.values():
+        rows = [l for l in path.read_text().split("\n")
+                if l.startswith("| ") and "`[" in l and "]`" in l]
+        assert len(rows) == len(programs), (
+            f"{path.name} has {len(rows)} program rows but the library defines "
+            f"{len(programs)}")
 
 
 if __name__ == "__main__":

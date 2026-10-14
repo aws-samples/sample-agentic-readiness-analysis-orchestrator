@@ -1,47 +1,62 @@
 {
+  "repo_name": "legacy-crm-desktop",
+  "analysis_type": "ara",
   "metadata": {
     "analysis_type": "ara",
-    "analysis_date": "2026-08-21",
+    "analysis_date": "2026-10-13",
     "td_version": "agentic-readiness-analysis",
-    "repo_name": "legacy-crm-desktop",
+    "portfolio_name": "ara",
+    "target_path": "harness/after/_src/ara/legacy-crm-desktop",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
+    "repo_type_justification": "Application source with a deployable entry point is present (frmCustomer.frm defines VB.Form frmCustomer with a Form_Load bootstrap and ADODB data access) and README.md describes a distributed Win32 desktop EXE. No second deployable unit (not monorepo), no library packaging manifest, and no resource-provisioning IaC or deployment-only config. Residual runnable-app case → application.",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
+    "archetype_justification": "No message-queue consumers and no multi-service orchestration. The system owns persistent state (ADODB connection to S:\\CRM\\sales.mdb) and performs entity writes (INSERT INTO Customers) rather than read-heavy querying — stateful-crud.",
     "agent_scope": "write-enabled",
     "agent_scope_source": "inferred",
-    "portfolio_name": null,
-    "tech_stack": {
-      "language": "Visual Basic 6.0",
-      "loc": 45,
-      "framework": "VB6 Runtime / ADODB",
-      "architecture": "Win32 Desktop + Microsoft Access"
-    },
+    "agent_scope_reasoning": "has_write_operations = true (cmdSave_Click executes INSERT INTO Customers against the Access datastore), so agent_scope resolves to write-enabled per Step 1.5.",
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_http_rpc_surface": false,
       "has_auth_surface": false,
       "has_write_operations": true,
       "has_logging_of_user_data": false
+    },
+    "dev_library_application_override": false,
+    "tech_stack": {
+      "language": "Visual Basic 6.0",
+      "loc": 70,
+      "framework": "VB6 forms + ADODB / Microsoft Jet OLEDB 4.0; Crystal Reports 8.5",
+      "architecture": "Win32 desktop two-tier client-server: hand-distributed EXE reading/writing a Microsoft Access 2003 .mdb on an SMB file share, with a nightly DTS/SSIS sync to SQL Server 2012 for reporting"
     }
   },
   "classification": {
     "tier": "Not Agent-Integrable",
     "sub_qualifier": null,
     "blocker_count": 7,
-    "risk_safety_count": 10,
-    "risk_quality_count": 7,
-    "info_count": 12,
-    "high_count": 7,
-    "medium_count": 17,
-    "low_count": 12,
-    "rule_matched": "\u22653 BLOCKER \u2192 Not Agent-Integrable"
+    "risk_safety_count": 11,
+    "risk_quality_count": 9,
+    "info_count": 10,
+    "high_count": 18,
+    "medium_count": 9,
+    "low_count": 10,
+    "rule_matched": "≥3 BLOCKER → Not Agent-Integrable",
+    "readiness_profile": "Not Agent-Integrable"
   },
   "counts": {
-    "total": 36,
-    "high": 7,
-    "medium": 17,
-    "low": 12
+    "total": 37,
+    "high": 18,
+    "medium": 9,
+    "low": 10,
+    "blocker": 7,
+    "risk_safety": 11,
+    "risk_quality": 9,
+    "info": 10,
+    "na": 0,
+    "not_evaluated_extended": 3,
+    "pass": 3,
+    "questions_total": 43
   },
   "findings": [
     {
@@ -49,673 +64,31 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No API Interface \u2014 Direct Database Access Only",
-      "description": "The application is a Win32 desktop EXE (Visual Basic 6.0) that communicates directly with a Microsoft Access .mdb file on an SMB file share via ADODB. There is no REST, GraphQL, AsyncAPI, or any programmatic interface. Integration requires direct database access or UI automation.",
-      "gap": "No API exists. The only integration surface is a Win32 form and a shared Access database file at S:\\CRM\\sales.mdb.",
-      "recommendation": "Implement a REST API layer (e.g., .NET Web API or Node.js Express) wrapping customer CRUD operations. Migrate from Access .mdb to a proper database engine.",
+      "title": "Documented API Interface",
+      "description": "No programmatic interface of any kind exists. The only integration surface is the VB6 form `frmCustomer` in `frmCustomer.frm`, which opens an ADODB connection directly to a Microsoft Access file (`Provider=Microsoft.Jet.OLEDB.4.0;Data Source=S:\\CRM\\sales.mdb`, lines 19-21) and executes inline SQL from a button click handler (`cmdSave_Click`, lines 24-34). README.md documents the integration model as 'a Microsoft Access (.mdb) file on a shared network drive' with a nightly DTS/SSIS sync to SQL Server — i.e. file-based and database-level exchange. Searched for: REST route definitions, Spring/Flask/Express handlers, `.graphql`/`.gql`, `openapi.*`/`swagger.*`, AsyncAPI, `.smithy`, RPA/Selenium scripts — zero results across the 3 tracked files.",
+      "gap": "There is no REST, GraphQL, gRPC or AsyncAPI interface. Any agent integration would require direct Jet/OLEDB access to an .mdb file on an SMB share, or UI automation of a Win32 form — both brittle, unauditable, and unsupported for concurrent machine-speed callers.",
+      "recommendation": "Expose customer operations behind a service API before any agent integration. Target: migrate the Access data to a managed relational store (Amazon RDS/Aurora) and front it with a documented HTTP API (API Gateway + application service) that becomes the single agent-facing contract; retire direct .mdb access.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "14-16"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "blocker_remediation": {
-          "immediate": "Design and implement a REST API layer wrapping customer CRUD operations.",
-          "target_state": "A documented, versioned HTTP API with OpenAPI specification.",
-          "estimated_effort": "High",
-          "dependencies": [
-            "Database migration from Access .mdb"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "API-Q4",
-      "category": "API Surface",
-      "category_display": "API & Tooling",
-      "category_id": "API",
-      "title": "Non-Idempotent Write Operations",
-      "description": "The sole write operation (cmdSave_Click) performs an INSERT INTO Customers with no idempotency key, no unique constraint on business keys, and no deduplication mechanism. Repeated execution creates duplicate records.",
-      "gap": "No idempotency keys, no unique business key constraints, no deduplication logic.",
-      "recommendation": "Add unique constraints on business keys and implement idempotency key support in write operations.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "26-31"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND write operations have no idempotency mechanism.",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "The INSERT INTO Customers operation in frmCustomer.frm creates duplicate records on retry with no deduplication. Agent retries at machine speed would corrupt data.",
-        "blocker_remediation": {
-          "immediate": "Add unique constraint on business key (customer name + created_by).",
-          "target_state": "All write operations accept idempotency key and guarantee exactly-once semantics.",
-          "estimated_effort": "Medium",
-          "dependencies": [
-            "API-Q1"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "AUTH-Q1",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Machine Identity Authentication",
-      "description": "The application uses a single hardcoded database password (crm2005pw) embedded in source code. No concept of machine identity, service accounts, OAuth 2.0 client credentials, API keys, or mTLS.",
-      "gap": "No machine identity authentication mechanism. No service account support. No principal attribution.",
-      "recommendation": "Implement OAuth 2.0 client credentials flow or API key authentication with per-agent identity attribution in audit logs.",
-      "severity": "High",
-      "priority": "P0",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "10-11"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "blocker_remediation": {
-          "immediate": "Implement service account model with distinct credentials per agent identity.",
-          "target_state": "OAuth 2.0 client credentials or API key authentication with per-agent attribution.",
-          "estimated_effort": "High",
-          "dependencies": [
-            "API-Q1"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "AUTH-Q6",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Audit Logging",
-      "description": "No audit logging exists. On Error Resume Next swallows all errors with no logging. CreatedBy/CreatedOn are mutable database fields, not an immutable audit trail.",
-      "gap": "No immutable audit trail. No logging of authenticated principals. No tamper-evident log storage.",
-      "recommendation": "Implement immutable audit logging (CloudTrail or equivalent) with S3 object lock and agent identity attribution on every write.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "26-34"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging exists.",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agents require full audit attribution. No logging infrastructure exists \u2014 On Error Resume Next swallows all events.",
-        "blocker_remediation": {
-          "immediate": "Implement append-only audit log table recording every write with principal, timestamp, operation type.",
-          "target_state": "Immutable audit logging with CloudTrail, S3 object lock, and agent identity attribution.",
-          "estimated_effort": "Medium",
-          "dependencies": [
-            "AUTH-Q1"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "STATE-Q1",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Compensation or Rollback Capability",
-      "description": "No compensation or rollback mechanism exists. The single INSERT operation is fire-and-forget with On Error Resume Next. No transactions, saga patterns, or undo logic.",
-      "gap": "No rollback. No compensation. No transaction management. Access database has no transaction isolation.",
-      "recommendation": "Implement database transactions with rollback. Add saga pattern for multi-step operations.",
-      "severity": "High",
-      "priority": "P0",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "26-34"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no rollback/compensation mechanism exists.",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agent workflows that fail mid-sequence leave partial state with no recovery. Access .mdb has no transaction support.",
-        "blocker_remediation": {
-          "immediate": "Migrate to database with proper transaction support. Implement explicit commit/rollback.",
-          "target_state": "All writes in transactions with rollback. Multi-step workflows have compensation logic.",
-          "estimated_effort": "High",
-          "dependencies": [
-            "Database migration from Access .mdb"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "DATA-Q1",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "Sensitive Data Fully Exposed \u2014 No Scoping or Access Differentiation",
-      "description": "Stage A: System stores customer PII in Access database. Stage B: B1 \u2014 no field filtering, single credential grants full access to all data. B2 \u2014 no access differentiation. B3 \u2014 no classification.",
-      "gap": "B1: All data fully exposed via shared credential. B2: No access differentiation mechanism. B3: No data classification.",
-      "recommendation": "Implement field-level filtering in API responses and role-based access differentiation.",
-      "severity": "High",
-      "priority": "P0",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "10-11"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND B1 fires \u2014 all data accessible with no field filtering.",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "DATA-Q1 B1 fired because single hardcoded credential in frmCustomer.frm grants unrestricted access to all customer PII. No field-level scoping exists.",
-        "data_q1_subchecks": {
-          "b1": {
-            "fired": true,
-            "severity": "BLOCKER",
-            "reasoning": "No API response scoping. Single credential grants full access to all fields and records."
-          },
-          "b2": {
-            "fired": true,
-            "severity": "RISK-SAFETY",
-            "reasoning": "No access control differentiation. One credential accesses everything."
-          },
-          "b3": {
-            "fired": true,
-            "severity": "INFO",
-            "reasoning": "No formal classification metadata exists."
-          }
-        },
-        "blocker_remediation": {
-          "immediate": "Implement field-level filtering and role-based access in new API layer.",
-          "target_state": "Agent-facing APIs return only required fields. Differentiated access scopes enforced per identity.",
-          "estimated_effort": "High",
-          "dependencies": [
-            "API-Q1",
-            "AUTH-Q1"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "DATA-Q2",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No Data Residency Controls",
-      "description": "Customer PII stored on uncontrolled SMB file share (S:\\CRM\\sales.mdb). No data residency controls, region configuration, or sovereignty enforcement.",
-      "gap": "No residency controls. No region configuration. No sovereignty policies.",
-      "recommendation": "Classify data against applicable regulations. Implement residency controls at infrastructure layer. Use region-local LLM endpoints.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "10"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND customer PII on uncontrolled file share with no residency controls.",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "Customer PII (names) stored on a Windows file server with no region controls. An agent could transmit this data to any jurisdiction without constraint.",
-        "blocker_remediation": {
-          "immediate": "Classify data against GDPR/CCPA. Implement region-aware storage.",
-          "target_state": "Data classified by jurisdiction. Residency boundaries enforced at infrastructure layer.",
-          "estimated_effort": "Medium",
-          "dependencies": [
-            "Cloud infrastructure migration"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "AUTH-Q2",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Scoped Permissions",
-      "description": "Single hardcoded credential grants full read/write access to entire database. No mechanism for scoped permissions or access differentiation.",
-      "gap": "No authorization model. No scoped permissions. No IAM policies. No role differentiation.",
-      "recommendation": "Implement RBAC or ABAC authorization model with per-agent scoped permissions in new API layer.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "10-11"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Restrict agent to read-only at orchestration layer",
-          "API gateway with per-agent resource policies"
-        ],
-        "remediation_timeline": "90-120 days"
-      }
-    },
-    {
-      "question_id": "AUTH-Q3",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Action-Level Authorization",
-      "description": "No action-level authorization exists. Any caller with the database password can perform any operation on any record.",
-      "gap": "No ABAC/RBAC. No action-level checks. No permission matrix.",
-      "recommendation": "Implement action-level authorization distinguishing read, create, update, and delete operations per agent identity.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "14-16"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Action-level restrictions at API gateway layer",
-          "Separate database credentials with different permissions"
-        ],
-        "remediation_timeline": "90-120 days"
-      }
-    },
-    {
-      "question_id": "AUTH-Q4",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Identity Propagation",
-      "description": "No identity propagation mechanism. Windows USERNAME environment variable captured in CreatedBy field is not an authenticated identity and is trivially spoofable.",
-      "gap": "No JWT/OAuth token exchange. No on-behalf-of flows. No agent/user identity distinction.",
-      "recommendation": "Implement identity propagation (OAuth 2.0 on-behalf-of or JWT with subject claim) in new API layer.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "High",
-      "phase": 2,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "28"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Verified user context header through API gateway",
-          "OAuth 2.0 token exchange"
-        ],
-        "remediation_timeline": "90-120 days"
-      }
-    },
-    {
-      "question_id": "AUTH-Q5",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "Hardcoded Credentials in Source Code",
-      "description": "Database credentials hardcoded as constants in VB6 source code (Private Const DB_PW As String = \"crm2005pw\"). Password committed to version control in plaintext.",
-      "gap": "Hardcoded credentials. No secrets management (no Secrets Manager, no Vault). No rotation. Plaintext in repository.",
-      "recommendation": "Migrate credentials to AWS Secrets Manager with automatic rotation. Remove from git history.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "11"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Immediately rotate database password",
-          "Move to secrets manager"
-        ],
-        "remediation_timeline": "30-60 days"
-      }
-    },
-    {
-      "question_id": "AUTH-Q7",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Agent Identity Suspension Capability",
-      "description": "No agent identity concept. Single shared credential cannot be selectively revoked without breaking all access.",
-      "gap": "No per-agent identity. No suspension mechanism. No individual revocation.",
-      "recommendation": "Implement per-agent credentials with individual revocation capability.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "10-11"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Per-agent API keys at gateway layer with individual revocation",
-          "Short-lived tokens with blacklist"
-        ],
-        "remediation_timeline": "90-120 days"
-      }
-    },
-    {
-      "question_id": "STATE-Q3",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Concurrency Controls \u2014 Known Data Corruption",
-      "description": "No concurrency controls exist. Access .mdb on file share has no optimistic locking, no version fields, no ETags. Monthly data corruption from concurrent writes confirmed.",
-      "gap": "No optimistic locking. No version fields. No conflict resolution. Known corruption.",
-      "recommendation": "Migrate to database with proper concurrency controls. Implement optimistic locking with version fields.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "26-34"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Serialize agent writes through single-threaded queue",
-          "Optimistic locking in migrated database"
-        ],
-        "remediation_timeline": "60-90 days"
-      }
-    },
-    {
-      "question_id": "STATE-Q6",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Blast Radius or Transaction Limits",
-      "description": "No transaction limits exist. No configurable caps on records modified, operations per session, or business-domain limits. Unlimited INSERT operations possible.",
-      "gap": "No per-caller transaction limits. No bulk operation caps. No business-domain limits.",
-      "recommendation": "Implement configurable per-agent transaction limits in new API layer.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "26-31"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Per-agent operation quotas at API gateway",
-          "Batch size limits in API layer"
-        ],
-        "remediation_timeline": "60-90 days"
-      }
-    },
-    {
-      "question_id": "HITL-Q1",
-      "category": "Human-in-the-Loop",
-      "category_display": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Draft/Pending State for Agent Writes",
-      "description": "No draft or pending state exists. INSERT operations immediately commit records. No intermediate state for human review.",
-      "gap": "No draft/pending status fields. No approval workflow. No two-step commit. All writes immediate.",
-      "recommendation": "Add status field with PENDING/APPROVED states to entities. Agent-created records start as PENDING.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "26-31"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Separate pending_customers staging table",
-          "Status field with DRAFT/PENDING/APPROVED states"
-        ],
-        "remediation_timeline": "60-90 days"
-      }
-    },
-    {
-      "question_id": "HITL-Q2",
-      "category": "Human-in-the-Loop",
-      "category_display": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Configurable Approval Gates",
-      "description": "No approval gates exist. All operations execute immediately without configurable approval steps.",
-      "gap": "No approval API endpoints. No configurable operation-level flags. No HITL mechanism.",
-      "recommendation": "Implement configurable per-operation approval requirements in new API layer.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "26-31"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Approval gates at orchestration layer",
-          "Configurable per-operation approval in API"
-        ],
-        "remediation_timeline": "60-90 days"
-      }
-    },
-    {
-      "question_id": "DATA-Q6",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No PII Redaction Capability",
-      "description": "No PII redaction capability. No logging infrastructure exists currently, but no controls prevent PII exposure if observability is added. SQL strings contain customer names in memory.",
-      "gap": "No log scrubbing. No PII masking. No structured logging with field filtering.",
-      "recommendation": "Implement structured logging with PII redaction from the start in modernized architecture.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "26-34"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "PII masking from day one when adding observability",
-          "Structured logging with field-level redaction"
-        ],
-        "remediation_timeline": "30-60 days"
-      }
-    },
-    {
-      "question_id": "STATE-Q2",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "State Only Accessible via Direct Database File Access",
-      "description": "Application state stored in Access .mdb only queryable via direct ADODB connections. No API endpoint to query current state.",
-      "gap": "No GET endpoints. No status query APIs. Direct database file access only.",
-      "recommendation": "Implement read endpoints in new API layer with proper filtering and pagination.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
       "evidence": {
         "file": "frmCustomer.frm",
         "lines": null
       },
       "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60-90 days"
-      }
-    },
-    {
-      "question_id": "DATA-Q4",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No Input Validation \u2014 SQL Injection Vulnerability",
-      "description": "No input validation. User input (txtName.Text) concatenated directly into SQL string. SQL injection vulnerability. No schema enforcement.",
-      "gap": "No validation. No parameterized queries. SQL injection via string concatenation.",
-      "recommendation": "Replace string-concatenated SQL with parameterized queries. Implement input validation with structured error responses.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "27-28"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30-60 days"
-      }
-    },
-    {
-      "question_id": "DATA-Q5",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "Incomplete Temporal Metadata",
-      "description": "Only CreatedOn (via Now()) exists. No UpdatedAt field. No timezone normalization. No freshness signaling.",
-      "gap": "No updated_at. No timezone handling. No freshness signals.",
-      "recommendation": "Add updated_at timestamps. Store in UTC. Implement freshness signaling in API responses.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "28"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30-60 days"
-      }
-    },
-    {
-      "question_id": "DISC-Q1",
-      "category": "Discovery & Documentation",
-      "category_display": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "No Schema Versioning or API Contracts",
-      "description": "No schema versioning. Schema implicit from INSERT statement only. No migrations, contracts, or breaking change detection.",
-      "gap": "No schema documentation. No versioning. No migrations. No contract tests.",
-      "recommendation": "Document schema, implement versioned migrations, add contract testing in CI.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "27-28"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60-90 days"
-      }
-    },
-    {
-      "question_id": "HITL-Q3",
-      "category": "Human-in-the-Loop",
-      "category_display": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Sandbox/Staging Environment",
-      "description": "No sandbox or staging environment. Single production environment. Manual EXE deployment.",
-      "gap": "No staging. No sandbox. No test data. No environment separation.",
-      "recommendation": "Create staging environment with production-equivalent data shape as part of modernization.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30-60 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q4",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "Zero Automated Test Coverage",
-      "description": "No automated tests of any kind. No CI pipeline. Compiled on one developer's machine.",
-      "gap": "No unit tests. No integration tests. No API tests. No CI.",
-      "recommendation": "Implement automated API tests in CI as part of modernization. Target critical path coverage.",
-      "severity": "Medium",
-      "priority": "P3",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60-90 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q5",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "No Encryption at Rest",
-      "description": "Data stored in unencrypted Access .mdb on SMB file share. Access database password is weak access control, not encryption.",
-      "gap": "No encryption at rest. No KMS. No disk-level encryption.",
-      "recommendation": "Migrate to cloud database with KMS encryption at rest (RDS with AWS KMS).",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "10"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30-60 days"
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Define the customer-maintenance operations (create/read/update customer) as an HTTP API contract and stand up a service in front of the migrated datastore.",
+          "target_state": "Agents call a versioned, documented HTTP API; no caller touches the .mdb file or the Access schema directly.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "AUTH-Q1",
+            "DATA-Q1",
+            "ENG-Q1"
+          ]
+        }
       }
     },
     {
@@ -723,16 +96,16 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Machine-Readable API Specification",
-      "description": "No HTTP/RPC surface \u2014 machine-readable spec is not applicable. Desktop application with no server component.",
-      "gap": "No API surface to document.",
-      "recommendation": "Create OpenAPI specification when API layer is built.",
+      "title": "Machine-Readable API Specification",
+      "description": "No HTTP/RPC surface exists (`has_http_rpc_surface = false`): `frmCustomer.frm` is a Win32 form with ADODB data access only. No `openapi.*`, `swagger.*`, `.graphql`, `.gql`, `.smithy`, or AsyncAPI file is present in the repository.",
+      "gap": "No machine-readable specification — but there is no callable API surface for a spec to describe. Surface-flag calibration applies: 'No HTTP/RPC surface — machine-readable spec is not applicable.'",
+      "recommendation": "When the API from API-Q1 is introduced, generate an OpenAPI document from the implementation annotations and publish it as the agent tool-binding source.",
       "severity": "Low",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
+        "file": "frmCustomer.frm",
         "lines": null
       },
       "ara_metadata": {
@@ -745,21 +118,55 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Structured Error Responses",
-      "description": "No HTTP/RPC surface \u2014 structured error responses not applicable. Errors shown via MsgBox dialogs.",
-      "gap": "No API surface; errors via MsgBox only.",
-      "recommendation": "Design structured error format when API layer is built.",
+      "title": "Structured Error Responses",
+      "description": "No API responses exist to structure. Error handling in `frmCustomer.frm` is `On Error Resume Next` followed by a `MsgBox` dialog ('Could not save (record may be locked). Try again.', lines 28-33) — a human-facing modal with no error code, no category, and no retryable indicator. The error is then cleared (`Err.Clear`).",
+      "gap": "Failures are swallowed and surfaced only as UI text. Surface-flag calibration applies (no HTTP/RPC surface), so this is recorded as INFO rather than RISK-QUALITY.",
+      "recommendation": "Replace `On Error Resume Next` with explicit error propagation now, and define a structured error envelope (code, message, retryable) as part of the API introduced in API-Q1.",
       "severity": "Low",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "frmCustomer.frm",
-        "lines": "30-32"
+        "lines": "28-33"
       },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "Idempotent Write Operations",
+      "description": "`cmdSave_Click` (frmCustomer.frm lines 24-34) performs an unconditional `INSERT INTO Customers (Name, CreatedBy, CreatedOn)` with no idempotency key, no business-key uniqueness check, and no read-before-write. Because errors are swallowed by `On Error Resume Next`, the caller cannot distinguish 'insert succeeded' from 'insert failed', and the user-facing message explicitly instructs 'Try again.' — a retry path that creates duplicate customer rows. No unique constraint is declared anywhere in the repository (no schema or migration files exist).",
+      "gap": "No idempotency mechanism: retries duplicate records. Combined with swallowed errors, the retry instruction is built into the UI.",
+      "recommendation": "Introduce an idempotency key (or a natural-key unique constraint on Customers) and make the write path return a deterministic result for repeated identical requests before exposing writes to any retrying caller.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "24-34"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "agent_scope is 'write-enabled' (inferred from has_write_operations=true) — evaluated as BLOCKER",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "The system's only operation is a non-idempotent INSERT with swallowed errors and a UI-level retry prompt; a retrying agent would duplicate customer records at machine speed.",
+        "blocker_remediation": {
+          "immediate": "Add a unique constraint on the Customers business key and return an explicit success/failure result from the save path instead of `On Error Resume Next`.",
+          "target_state": "Repeated identical write requests produce exactly one record and a deterministic response.",
+          "estimated_effort": "Medium",
+          "dependencies": [
+            "API-Q1",
+            "STATE-Q1"
+          ]
+        }
       }
     },
     {
@@ -767,16 +174,661 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Event Emission for State Changes",
-      "description": "No event emission capability. Direct INSERT only. No webhooks, message queues, or CDC pipelines.",
-      "gap": "No event-driven integration possible.",
-      "recommendation": "Add event emission (EventBridge/SNS) for state changes in modernized architecture.",
+      "title": "Event Emission for State Changes",
+      "description": "No event emission exists. State changes are written directly to the Access database by `cn.Execute sql` (frmCustomer.frm line 29) with no notification path. README.md describes downstream propagation as 'a nightly sync job to a SQL Server reporting database' via a scheduled DTS/SSIS package — batch, once per day. No webhooks, SNS/EventBridge/SQS, Kafka, or CDC pipeline is present.",
+      "gap": "No event or webhook surface; the only change-propagation mechanism is a nightly batch sync, giving downstream consumers up to 24 hours of staleness.",
+      "recommendation": "If event-reactive agents are a target, emit domain events (e.g. EventBridge) from the service introduced in API-Q1 rather than relying on nightly batch sync.",
       "severity": "Low",
       "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "29"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Machine Identity Authentication",
+      "description": "There is no authentication mechanism. The application connects to the data store with a single hardcoded Jet database password (`Private Const DB_PW As String = \"crm2005pw\"`, frmCustomer.frm line 8; used in the connection string at lines 19-21) shared by every copy of the EXE on every field laptop. Caller identity is taken from `Environ(\"USERNAME\")` (line 27) — a client-side environment variable that is trivially spoofable and is not authenticated by the database. Searched for: OAuth2/client-credentials flows, API keys with principal attribution, mTLS config, service accounts, Cognito/IAM/API Gateway authorizers — none present.",
+      "gap": "No machine identity, no principal authentication, and no trustworthy principal attribution. Every caller is indistinguishable at the data layer, so no downstream authorization or audit decision can be relied upon.",
+      "recommendation": "Introduce an identity provider and machine-identity authentication (e.g. OAuth 2.0 client credentials or IAM-authenticated service access) in front of the migrated datastore, with per-agent principals and no shared database credential.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "8, 19-21, 27"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Remove the shared Jet database password from the client and route data access through an authenticated service identity instead of client-side `Environ(\"USERNAME\")`.",
+          "target_state": "Each caller — human or agent — authenticates as a distinct, revocable principal that the data layer can attribute.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "API-Q1",
+            "AUTH-Q5"
+          ]
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Scoped Permissions (Least Privilege)",
+      "description": "Authorization is binary and shared: possession of the Jet database password (`DB_PW`, frmCustomer.frm line 8) grants full Jet/OLEDB access to `S:\\CRM\\sales.mdb` (line 7). There is no role model, no per-caller permission set, and no mechanism to grant read-only access to a subset of tables or rows. No IAM policies, resource policies, or condition keys exist (no IaC in the repository).",
+      "gap": "All authorization is coarse-grained — a single shared credential conveys full database access, so an agent identity cannot be scoped down to read-only or to specific resources.",
+      "recommendation": "Define scoped roles at the service/datastore layer (read-only, customer-write) and bind agent principals to the narrowest role once AUTH-Q1 identity exists.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "7-8"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Restrict the agent to an isolated read-only replica of the data rather than the shared .mdb credential.",
+          "Mediate all agent access through a human-operated service account with an explicit allowlist of operations."
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Action-Level Authorization",
+      "description": "No action-level authorization exists. `cmdSave_Click` (frmCustomer.frm lines 24-34) issues raw SQL over an ADODB connection opened with full database rights; the same credential can `INSERT`, `UPDATE` or `DELETE` any table in `sales.mdb`. Searched for `canRead`/`canWrite`/`canDelete`-style checks, ABAC/RBAC definitions, permission matrices and method-level authorization — none present.",
+      "gap": "The data layer cannot allow read without also allowing delete. An agent granted the ability to read customers inherently has the ability to destroy them.",
+      "recommendation": "Enforce action-level permissions in the service layer introduced in API-Q1 (separate read, create, update, delete grants per principal) and revoke direct SQL execution rights from callers.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "19-21, 24-34"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Grant the agent only SELECT rights on a dedicated database login until action-level checks exist.",
+          "Route all mutating operations through a human-approved batch process rather than the agent path."
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Identity Propagation and Delegation",
+      "description": "No identity propagation or delegation exists. The only identity signal is the client-side value of `Environ(\"USERNAME\")` string-concatenated into the `CreatedBy` column (frmCustomer.frm line 27). There is no token, no JWT parsing, no on-behalf-of flow, and no way to distinguish a caller acting as itself from a caller acting on behalf of a specific user — the archetype is `stateful-crud`, so no INFO downgrade applies.",
+      "gap": "An agent acting on behalf of a user cannot be bounded by that user's permissions, and the `CreatedBy` attribution it writes is caller-asserted and unverifiable.",
+      "recommendation": "Carry a verified identity (token-based, with distinct agent-as-self and agent-on-behalf-of-user modes) through the service layer and populate `CreatedBy` from the authenticated principal, never from a client-supplied environment variable.",
+      "severity": "High",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "27"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Restrict the agent to a single dedicated principal with its own narrow permissions and do not use it for on-behalf-of-user workflows.",
+          "Record the orchestration-layer user context in an external audit store that the agent cannot write to."
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Credential Management",
+      "description": "Database credentials are hardcoded in source and compiled into the distributed binary: `Private Const DB_PATH As String = \"S:\\CRM\\sales.mdb\"` and `Private Const DB_PW As String = \"crm2005pw\"` (frmCustomer.frm lines 7-8), interpolated into the connection string at lines 19-21. README.md independently records this as a known issue: 'ODBC connection string with credentials embedded in the EXE'. The password value indicates no rotation since 2005. No secrets manager, Vault client, or parameter-store reference exists; `.gitignore` excludes `.env` files but no secret-management mechanism replaces them.",
+      "gap": "A static, unrotated, shared credential is embedded in code and in every deployed EXE. Anything that can read the binary or the repository — including a prompt-injected agent with file access — obtains full database access.",
+      "recommendation": "Move the credential to a managed secret store (AWS Secrets Manager) with rotation, remove the constants from source, and rotate the existing password immediately since it is exposed in version control history.",
+      "severity": "High",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "7-8"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Rotate the Jet password and restrict NTFS/share permissions on S:\\CRM so only the service principal can open the file.",
+          "Block agent file-system access to the repository and the distributed EXE so the constant cannot be read."
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Immutable Audit Logging",
+      "description": "There is no audit log. The single write path (`cn.Execute sql`, frmCustomer.frm line 29) records only a `CreatedBy` column populated from the client-controlled `Environ(\"USERNAME\")` value (line 27) inside the same mutable Access file it is auditing. Errors are discarded by `On Error Resume Next` (line 28), so failed writes leave no trace at all. Searched for CloudTrail/CloudWatch configuration, log retention policy, object-lock log storage and any logging framework — none present (no IaC, no config files beyond `.gitignore`).",
+      "gap": "No immutable, tamper-evident record of write operations and no verifiable principal attribution. Agent-initiated writes could not be reconstructed, attributed, or proven for compliance or forensics.",
+      "recommendation": "Emit an append-only audit record (authenticated principal, operation, timestamp, outcome) to tamper-evident storage outside the application's own writable datastore before enabling any write-capable agent.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "27-33"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "agent_scope is 'write-enabled' (inferred from has_write_operations=true) — evaluated as BLOCKER",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "The system performs state-mutating writes with no immutable audit trail and only spoofable, self-asserted attribution stored in the same mutable .mdb file, so write-enabled agent actions would be undetectable and unprovable.",
+        "blocker_remediation": {
+          "immediate": "Stop swallowing errors and write an append-only audit entry for every save attempt to storage the application cannot rewrite.",
+          "target_state": "Every write carries an immutable, tamper-evident audit record naming the authenticated principal and outcome.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "AUTH-Q1",
+            "API-Q1"
+          ]
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Agent Identity Suspension",
+      "description": "There is no revocable identity to suspend. Access is conveyed by the shared compiled-in password (`DB_PW`, frmCustomer.frm line 8); revoking it requires changing the Jet database password and recompiling and hand-redistributing the EXE to every laptop — README.md states 'Distribution: EXE copied to each laptop by hand' and 'No installer; deployment is \"copy the EXE and the .mdb template\"'. No API key revocation, role deactivation, or account-disable mechanism exists.",
+      "gap": "A misbehaving caller cannot be isolated without revoking access for every user of the application simultaneously.",
+      "recommendation": "Issue per-principal credentials through the identity provider from AUTH-Q1 so a single agent identity can be disabled immediately without affecting other callers.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "8"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Place the agent behind a proxy/service account whose credentials can be revoked independently of the shared EXE password.",
+          "Operate the agent only during supervised windows with a documented manual kill switch (disable the share ACL for the agent principal)."
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Compensation and Rollback",
+      "description": "No transaction, compensation, or rollback support exists. `cmdSave_Click` (frmCustomer.frm lines 24-34) executes a bare `cn.Execute sql` with no `BeginTrans`/`CommitTrans`/`RollbackTrans`, no saga or compensating action, and no undo path. `On Error Resume Next` (line 28) actively discards the failure signal, and `Form_Unload` closes the connection the same way (lines 36-40). README.md records that the Access file 'corrupts under concurrent writes (~monthly)' — partial-write damage is an observed operational reality, not a hypothetical.",
+      "gap": "A multi-step or failed write leaves the database in a partial state with no rollback and no recorded failure. There is no mechanism to undo an agent-initiated write.",
+      "recommendation": "Wrap write sequences in explicit transactions with error propagation (and provide an explicit reversal operation for each exposed write) before allowing any autonomous write caller.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "24-40"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "agent_scope is 'write-enabled' (inferred from has_write_operations=true) — evaluated as BLOCKER",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "Writes are non-transactional and failures are silently swallowed, so a failed agent write sequence cannot be detected or compensated; the README documents recurring data corruption from exactly this pattern.",
+        "blocker_remediation": {
+          "immediate": "Remove `On Error Resume Next` from the write path and wrap `cn.Execute` in an explicit ADODB transaction with rollback on error.",
+          "target_state": "Every write is atomic, failures are surfaced to the caller, and each exposed write has a documented compensating operation.",
+          "estimated_effort": "Medium",
+          "dependencies": [
+            "API-Q4",
+            "AUTH-Q6"
+          ]
+        }
+      }
+    },
+    {
+      "question_id": "STATE-Q2",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Queryable Current State",
+      "description": "No queryable state interface exists. `frmCustomer.frm` contains exactly one data operation — an `INSERT` in `cmdSave_Click` (lines 24-34). There is no SELECT, no read-before-write, no status field, and no GET-equivalent surface; the form's only control bound to data is the `txtName` text box. State can only be inspected by opening the .mdb file directly.",
+      "gap": "A caller cannot inspect existing customer state before acting, so it cannot tell whether a record already exists — which compounds the idempotency gap in API-Q4.",
+      "recommendation": "Expose read operations (get/list customer) alongside the write path so callers can verify current state before mutating it.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "24-34"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Provide the agent a read-only query path over the nightly SQL Server reporting copy for state inspection.",
+          "Require the orchestration layer to supply existing-record context rather than letting the agent assume state."
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Concurrency Controls",
+      "description": "No concurrency control exists. The write is a fire-and-forget `cn.Execute` against a Jet/OLEDB file on an SMB share (frmCustomer.frm lines 19-21, 29) with no version field, no `If-Match`/ETag equivalent, no `SELECT ... FOR UPDATE`, and no conflict-resolution logic. The only concurrency handling is a `MsgBox` telling the user 'record may be locked... Try again.' (line 31). README.md confirms the consequences: 'Access .mdb on a file share corrupts under concurrent writes (~monthly)' and 'No real multi-user locking; \"record locked\" errors are common'.",
+      "gap": "Concurrent writers corrupt the data file — an already-observed monthly failure. Multiple concurrent agent instances would multiply write contention on a store with no locking discipline.",
+      "recommendation": "Migrate off file-share Jet to a server-based database with real transaction isolation, and add optimistic concurrency (row version) on customer records before allowing concurrent write callers.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "19-21, 29-31"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "agent_scope is 'write-enabled' — evaluated as RISK-SAFETY",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "agent_scope is 'write-enabled' — evaluated as RISK-SAFETY",
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Serialize all agent writes through a single-threaded queue so only one write is in flight at a time.",
+          "Cap the agent to one concurrent instance and schedule it outside field-sales working hours."
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Circuit Breakers and Resilience",
+      "description": "The application depends on an external resource — the `S:\\CRM\\sales.mdb` file on an SMB share (frmCustomer.frm line 7, opened at lines 19-21) — with no resilience controls: no timeout on `cn.Open`, no retry or backoff, no circuit breaker, and no connection-failure handling (`Form_Load` has no error handler at all, lines 17-22). README.md notes the dependency is a single point of failure: 'File share is a single Windows file server with no failover'.",
+      "gap": "A slow or unavailable file share produces an unhandled failure or an indefinite hang, and repeated caller retries apply unbounded pressure to a dependency with no failover.",
+      "recommendation": "Add explicit connection timeouts and bounded retry with backoff around data access, and introduce a circuit breaker in the service layer from API-Q1 so dependency failure degrades predictably.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "7, 17-22"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Enforce caller-side timeouts and a retry budget in the agent orchestration layer.",
+          "Add a health probe on the share and halt agent invocation automatically when the probe fails."
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Rate Limiting and Throttling",
+      "description": "There is no API layer to throttle: `has_http_rpc_surface` is false — `frmCustomer.frm` is a Win32 form whose only data path is a direct ADODB connection (lines 19-21). No API Gateway configuration, WAF rate rule, or rate-limiting middleware exists (no IaC or config files in the repository). The effective limiter today is human click rate on `cmdSave`.",
+      "gap": "No rate limiting exists, but surface-flag calibration applies: 'System exposes no HTTP/RPC surface — API-layer rate limiting is not applicable.' Request-rate protection would have to be introduced along with the API itself.",
+      "recommendation": "Define throttling limits (per-principal request quotas) as part of the API introduced in API-Q1, since the underlying Jet data store cannot absorb machine-speed write traffic.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "19-21"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Blast Radius and Transaction Limits",
+      "description": "No business-domain limits exist. `cmdSave_Click` (frmCustomer.frm lines 24-34) imposes no cap on records created, no bulk-operation size limit, no per-caller quota, and no spend threshold; nothing in the repository is configurable at all (no config files beyond `.gitignore`). A caller invoking the write path in a loop would be bounded only by the Access file's own 2 GB limit and its tendency to corrupt.",
+      "gap": "There is no way to cap the blast radius of a caller executing correct-but-catastrophic logic — e.g. inserting thousands of customer rows into a file store that corrupts under write pressure.",
+      "recommendation": "Implement per-principal business transaction limits (max records created per run/hour, max bulk operation size) in the service layer from API-Q1, configurable independently of request-rate throttling.",
+      "severity": "High",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "24-34"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "agent_scope is 'write-enabled' — evaluated as RISK-SAFETY",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "agent_scope is 'write-enabled' — evaluated as RISK-SAFETY",
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Enforce a hard per-run write budget in the agent orchestration layer and abort on exceedance.",
+          "Require human batch review for any run proposing more than a fixed small number of record changes."
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Draft/Pending State",
+      "description": "There is no draft or pending state. The `Customers` insert in `cmdSave_Click` (frmCustomer.frm lines 25-27) writes `Name`, `CreatedBy`, `CreatedOn` only — no status column, no state machine, and no two-step create-then-confirm pattern. The write is committed immediately on button click with no reviewable intermediate record.",
+      "gap": "Every write is immediately final, so a proposed change cannot be staged for human review before it becomes authoritative data.",
+      "recommendation": "Add a status field (e.g. `PENDING_REVIEW` / `ACTIVE`) and a confirm operation so agent-proposed records land in a reviewable state before becoming live.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "25-27"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "agent_scope is 'write-enabled' — evaluated as RISK-SAFETY",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "agent_scope is 'write-enabled' — evaluated as RISK-SAFETY",
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Have the agent write proposals to a separate staging table or file that a human promotes manually.",
+          "Keep the agent in propose-only mode: it generates the record payload, a human performs the save in the form."
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Configurable Approval Gates",
+      "description": "No approval gate mechanism exists. `cmdSave_Click` executes the insert directly (frmCustomer.frm line 29) with no confirmation step, no approval endpoint, and no operation-level configuration flag — the application has no configuration surface at all. The only prompt in the code is a post-failure `MsgBox` (line 31), not a pre-execution approval.",
+      "gap": "High-risk operations cannot be configured to require human approval at the application layer, so there is no defense-in-depth beneath whatever gate the orchestration layer provides.",
+      "recommendation": "Make write operations approval-gated per operation type in the service layer from API-Q1 (request → approve → execute), so approval cannot be bypassed by calling the data layer directly.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "29-31"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "agent_scope is 'write-enabled' — evaluated as RISK-SAFETY",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "agent_scope is 'write-enabled' — evaluated as RISK-SAFETY",
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Place a human approval step in the agent orchestration layer before any invocation of the write path.",
+          "Restrict the agent's credential to read-only and require a human operator to perform all commits."
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Sandbox/Staging Environment",
+      "description": "No sandbox or staging environment exists. README.md states 'No tests, no build server; compiled on one developer's machine' and describes a single production data path — `S:\\CRM\\sales.mdb` on the shared drive — hardcoded as a constant with an explicit instruction not to change it: 'DO NOT change the .mdb path - field laptops are mapped to S:\\' (frmCustomer.frm lines 5, 7). There are no environment-specific configurations, no seed data scripts, and no synthetic data generators in the repository.",
+      "gap": "Because the database path is a compile-time constant pointing at production, there is no way to exercise the write path against production-shaped data without touching live customer records.",
+      "recommendation": "Externalize the data source to configuration and stand up a staging copy of the database with representative data so caller behaviour can be validated before production.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "5-7"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Create a copy of sales.mdb on a non-production share and build a separate test binary pointed at it for agent dry runs.",
+          "Validate all agent behaviour in read-only mode against the SQL Server reporting replica before enabling writes."
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Sensitive Data Classification",
+      "description": "Stage A = Yes: `has_persistent_data_store` is true and the store holds customer business records — `frmCustomer.frm` writes a `Customers` table with `Name`, `CreatedBy`, `CreatedOn` (lines 25-27) into `S:\\CRM\\sales.mdb` (line 7), and README.md describes the system as a 'Sales CRM' whose Access file is the system of record for the field sales team. Customer names and the operator's Windows username are personal data. Stage B — B1: there is no response-scoping layer of any kind; the only integration path is full Jet/OLEDB access to the .mdb file (lines 19-21), which grants every column of every table to any caller holding `DB_PW`. No projections, DTOs, serializer exclusions, or field-level authorization exist. B2: no access-control differentiation — a single shared password is the whole authorization model (line 8). B3: no classification metadata — no tags, field annotations, data catalog, or PII tooling anywhere in the repository.",
+      "gap": "Agent-facing access is unscoped at every layer: no field filtering (B1), no sensitive-vs-non-sensitive access differentiation (B2), and no classification metadata (B3). A caller granted access to create a customer necessarily has read access to the entire CRM dataset.",
+      "recommendation": "Front the data with a service that returns explicit field projections, split permissions by data domain, and classify the customer fields; no caller should hold direct .mdb credentials.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "7-8, 19-27"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "agent_scope is 'write-enabled' (inferred from has_write_operations=true) — B1 fires as BLOCKER; overall DATA-Q1 = BLOCKER",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "B1 fired because there is no API response layer at all — integration is direct Jet/OLEDB access to sales.mdb with the shared database password, so every sensitive column is exposed to any agent-capable caller, and the scope is write-enabled.",
+        "blocker_remediation": {
+          "immediate": "Stop distributing the database credential to callers and introduce a mediated read path that returns only explicitly selected, non-sensitive fields.",
+          "target_state": "Agent-facing responses are field-scoped projections, access is differentiated by data domain, and customer fields carry classification metadata.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "API-Q1",
+            "AUTH-Q1",
+            "AUTH-Q2"
+          ]
+        },
+        "data_q1_subchecks": {
+          "b1": {
+            "fired": true,
+            "severity": "BLOCKER",
+            "reasoning": "No API response scoping exists; direct .mdb access with DB_PW exposes all columns of all tables (frmCustomer.frm lines 8, 19-21)."
+          },
+          "b2": {
+            "fired": true,
+            "severity": "RISK-SAFETY",
+            "reasoning": "A single shared Jet password is the entire authorization model — no differentiation between sensitive and non-sensitive data access (frmCustomer.frm line 8)."
+          },
+          "b3": {
+            "fired": true,
+            "severity": "INFO",
+            "reasoning": "No classification tags, field-level sensitivity annotations, data catalog, or PII detection tooling present in the repository."
+          }
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Data Residency and Sovereignty",
+      "description": "The system holds persistent customer data (`has_persistent_data_store` = true) in `S:\\CRM\\sales.mdb` on an SMB share (frmCustomer.frm line 7) with a nightly copy into a SQL Server 2012 reporting database (README.md). No residency or sovereignty control or statement exists anywhere in the repository: searched README.md, `.gitignore`, and `frmCustomer.frm` for GDPR/LGPD/HIPAA references, region-specific storage configuration, cross-region replication settings, and data sovereignty policy — zero results. The physical location of the file server and the reporting database is undocumented, and there is no IaC to pin it.",
+      "gap": "The jurisdiction of the customer data is undetermined and unconstrained, and there is no technical control preventing data read from the .mdb from being transmitted to an out-of-region processor (including an LLM endpoint).",
+      "recommendation": "Determine and document the residency requirements for the CRM customer dataset, record the authoritative storage location, and pin processing (including any LLM endpoint) to a compliant region before any agent reads this data.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "agent_scope is 'write-enabled' (inferred from has_write_operations=true) — evaluated as BLOCKER",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "The system persists customer personal data with no documented residency constraint and no region pinning, so an agent could move regulated data across a compliance boundary with no control detecting it.",
+        "blocker_remediation": {
+          "immediate": "Document the data classification and residency obligations for the CRM dataset and the physical location of the file server and reporting database.",
+          "target_state": "Residency requirements are explicit, storage and processing regions are pinned in configuration, and cross-boundary transfer is technically blocked.",
+          "estimated_effort": "Medium",
+          "dependencies": [
+            "DATA-Q1"
+          ]
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Input Validation and Schema Enforcement",
+      "description": "There is no input validation. `cmdSave_Click` concatenates `txtName.Text` and `Environ(\"USERNAME\")` directly into an SQL string (frmCustomer.frm lines 25-27) — the code's own comment states 'String-concatenated SQL - no parameters (injection risk)'. There is no length check, no type or format validation, no escaping, no parameterized command (`ADODB.Command` with parameters is not used), and no request-size limit. Validation failures cannot be reported because `On Error Resume Next` (line 28) discards all errors and the only feedback is a generic `MsgBox` with no field identification (line 31).",
+      "gap": "Malformed or adversarial input is accepted and executed as SQL. A caller cannot self-correct because rejections are neither structured nor, in most cases, reported at all. This is an exploitable SQL injection path, reachable by anything that can set the Name value.",
+      "recommendation": "Replace string-concatenated SQL with parameterized `ADODB.Command` parameters, add explicit field validation (length, allowed characters) and return structured, field-level rejection messages instead of swallowing errors.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "25-31"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Validate and allowlist-sanitize the Name value in the caller/orchestration layer before invoking the write path.",
+          "Grant the write principal INSERT-only rights so an injected statement cannot drop or read other tables."
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Temporal Metadata and Freshness",
+      "description": "Temporal metadata is minimal and locally-scoped. The insert sets `CreatedOn` from VB6 `Now()` (frmCustomer.frm line 26), which returns the client laptop's local system time with no timezone normalization and no UTC storage — field laptops may differ in clock and timezone. There is no `updated_at`/`LastModified` column, no event-time field, and no freshness signal; README.md notes downstream reporting data is refreshed by a nightly batch, so consumers of the reporting copy can be up to 24 hours stale with no indicator.",
+      "gap": "Timestamps are unnormalized client local time and there is no update timestamp or staleness/consistency signal, so a caller cannot reliably reason about record age or whether data it reads is current.",
+      "recommendation": "Store timestamps in UTC from a single authoritative source, add a last-updated column, and expose a freshness indicator (e.g. last-sync time) on any read path offered to agents.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "26"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Have the orchestration layer stamp its own UTC timestamps on records it submits and treat CreatedOn as advisory.",
+          "Expose the nightly sync completion time to the agent so it can bound the staleness of reporting-database reads."
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "PII Redaction in Logs",
+      "description": "There is no redaction mechanism and no logging discipline. The system holds customer personal data (`has_persistent_data_store` = true, `Customers` table with `Name` and `CreatedBy`, frmCustomer.frm lines 25-27) but has no structured logging, no log scrubbing middleware, no PII masking utility, and no CloudWatch/Macie filters — searched the full repository (3 tracked files) for any logging framework or masking pattern with zero results. The only error surface is a `MsgBox` dialog (line 31). `.gitignore` excludes `*.log`, which indicates log files are produced somewhere in the operational process but no content control governs them; the full SQL statement — including the customer name — is held in the `sql` variable and would appear verbatim in any debugger, crash dump, or future log statement.",
+      "gap": "No redaction control exists for a system that handles customer PII, so any future or operational logging (including crash dumps and the nightly sync job) carries unmasked personal data into observable surfaces.",
+      "recommendation": "Introduce structured logging with an explicit PII allowlist/masking layer before adding any diagnostic logging to this write path, and confirm the nightly DTS/SSIS sync does not log row contents.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "25-31"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Prohibit the agent from echoing retrieved customer field values into its own transcripts or logs.",
+          "Restrict access to any produced .log files and crash dumps to the same control set as the customer database."
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Data Quality Awareness",
+      "description": "No data quality measurement exists for the CRM dataset held in `S:\\CRM\\sales.mdb`. There are no profiling reports, null-rate or duplicate-detection checks, freshness SLAs, or quality dashboards in the repository. The known-issues list in README.md points the other way: monthly file corruption under concurrent writes and frequent 'record locked' errors, plus the absence of any uniqueness enforcement (API-Q4) which makes duplicate customer rows likely.",
+      "gap": "Dataset completeness and duplication rates are unmeasured, and documented corruption events make quality degradation likely rather than hypothetical.",
+      "recommendation": "Profile the Customers table (null rates, duplicate names, orphan rows) and establish a baseline quality metric before an agent reasons over this data.",
+      "severity": "Low",
+      "priority": "P3",
       "effort": "Medium",
       "phase": 3,
       "evidence": {
-        "file": "frmCustomer.frm",
+        "file": "README.md",
         "lines": null
       },
       "ara_metadata": {
@@ -785,21 +837,70 @@
       }
     },
     {
-      "question_id": "STATE-Q5",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Rate Limiting \u2014 No API Surface",
-      "description": "No HTTP/RPC surface \u2014 API-layer rate limiting is not applicable. Desktop application accessed via file share.",
-      "gap": "No API surface to apply rate limits to.",
-      "recommendation": "Include rate limiting (API Gateway usage plans) when API layer is built.",
-      "severity": "Low",
-      "priority": "P1",
-      "effort": "Low",
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Schema Versioning and API Contracts",
+      "description": "There are no versioned contracts of any kind. The `Customers` schema is implied only by the inline SQL statement in `cmdSave_Click` (frmCustomer.frm lines 25-27) and lives inside the binary .mdb file; there are no migration files, no JSON Schema/Avro/Protobuf definitions, no schema registry, no `/v1/` style versioning, no changelog, and no breaking-change detection (there is no CI pipeline at all — README.md: 'No tests, no build server'). A schema change in the Access file would silently break every compiled client.",
+      "gap": "Schema and contract changes are undetectable and unversioned, so any caller binding to this data — including an agent tool definition — breaks silently when the .mdb schema changes.",
+      "recommendation": "Extract the schema into version-controlled migration files, publish a versioned contract for the data shape, and add breaking-change detection to a build pipeline.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
-        "lines": null
+        "file": "frmCustomer.frm",
+        "lines": "25-27"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Pin the agent tool definition to a schema snapshot and re-validate it on a scheduled cadence.",
+          "Add a startup assertion that verifies expected columns exist before the agent path executes."
+        ]
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Semantically Meaningful Field Names",
+      "description": "The field names that do exist are semantically clear: `Customers (Name, CreatedBy, CreatedOn)` in the insert statement (frmCustomer.frm lines 25-27) are readable, unabbreviated, and need no data dictionary. VB6 control and constant naming follows a conventional Hungarian prefix style (`frmCustomer`, `cmdSave`, `txtName`, `cn`, `DB_PATH`) which is interpretable in context. No legacy coded field names (e.g. `CUST_TYP_CD`) appear in the visible schema; however only three columns are visible in source — the remainder of the Access schema is inside the binary .mdb and was not assessable.",
+      "gap": "The visible schema is agent-friendly. The unassessable remainder of the .mdb schema is the open question, not the naming convention.",
+      "recommendation": "Export the full Access schema to text and review the remaining column names for legacy abbreviations before building agent tool definitions.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "25-27"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Data Catalog / Metadata Layer",
+      "description": "No data catalog or metadata layer exists. The repository contains no data dictionary, schema documentation, catalog entries, or metadata files — README.md documents runtime architecture only, and the authoritative schema is embedded in the binary `sales.mdb` on the file share (frmCustomer.frm line 7). The nightly DTS/SSIS package that populates the SQL Server reporting database is also not in the repository, so the downstream mapping is undocumented here.",
+      "gap": "What the CRM dataset contains and what its fields mean is undiscoverable from the repository, so agent tool definitions would have to be reverse-engineered from the .mdb file.",
+      "recommendation": "Export the Access schema and register the dataset (and its nightly reporting projection) in a catalog or at minimum a checked-in data dictionary.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "7"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -811,21 +912,26 @@
       "category": "Observability",
       "category_display": "Observability",
       "category_id": "OBS",
-      "title": "No Distributed Tracing or Structured Logging",
-      "description": "No HTTP/RPC surface and no request path to trace. No logging of any kind. On Error Resume Next swallows all errors.",
-      "gap": "No tracing. No structured logging. No correlation IDs.",
-      "recommendation": "Include OpenTelemetry and structured JSON logging in modernized architecture.",
-      "severity": "Low",
+      "title": "Distributed Tracing and Structured Logging",
+      "description": "There is no tracing and no logging. `frmCustomer.frm` contains no logging statements, no correlation or request identifier, no OpenTelemetry/X-Ray instrumentation, and no structured output of any kind; the three error handlers are `On Error Resume Next` (lines 28, 37) and a `MsgBox` (line 31). A failed save produces no record anywhere — the error object is explicitly cleared (`Err.Clear`, line 32).",
+      "gap": "Failures are unobservable. There is no trace, log line, or correlation identifier with which to reconstruct what happened during any request, agent-initiated or human.",
+      "recommendation": "Add structured logging with a per-operation correlation ID and propagate it through the service layer from API-Q1; remove the error-swallowing handlers so failures are recorded.",
+      "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "frmCustomer.frm",
-        "lines": "29-32"
+        "lines": "28-37"
       },
       "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Log every agent invocation and its full outcome in the orchestration layer, since the target system records nothing.",
+          "Require the agent to perform a read-back verification after each write to confirm the effect."
+        ]
       }
     },
     {
@@ -833,21 +939,26 @@
       "category": "Observability",
       "category_display": "Observability",
       "category_id": "OBS",
-      "title": "No Alerting Infrastructure",
-      "description": "No HTTP/RPC surface \u2014 alerting on API error rates and latency not applicable. No monitoring exists.",
-      "gap": "No alerting infrastructure.",
-      "recommendation": "Include CloudWatch alarms and alerting in modernized architecture.",
-      "severity": "Low",
+      "title": "Alerting on Error Rates and Latency",
+      "description": "No alerting exists. There are no CloudWatch alarms, anomaly detectors, SLO definitions, or paging integrations in the repository (no IaC and no configuration files beyond `.gitignore`). Failure detection is manual and user-reported: the application's response to a write failure is a dialog asking the user to try again (frmCustomer.frm line 31). README.md confirms recurring failure modes — monthly .mdb corruption and common 'record locked' errors — that today are discovered by field users rather than by monitoring.",
+      "gap": "Error-rate and latency degradation is invisible to operators, so a failing integration surface would be detected only after users or an agent had already been failing for an extended period.",
+      "recommendation": "Instrument the service layer with error-rate and latency metrics and configure threshold alarms on the operations agents will consume.",
+      "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
-        "lines": null
+        "file": "frmCustomer.frm",
+        "lines": "31"
       },
       "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Alert from the agent orchestration layer on consecutive write failures or latency spikes.",
+          "Add an external synthetic check that exercises the data path on a schedule and pages on failure."
+        ]
       }
     },
     {
@@ -855,10 +966,10 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No Infrastructure as Code",
-      "description": "No HTTP/RPC surface and no auth surface \u2014 infrastructure governance not applicable. No IaC exists. Manual provisioning only.",
-      "gap": "No IaC. Manual provisioning.",
-      "recommendation": "Use Terraform or CDK for all infrastructure in modernized architecture.",
+      "title": "Infrastructure Governance for Agent-Facing Surface",
+      "description": "There is no infrastructure as code: no Terraform, CloudFormation, CDK, Helm, Kustomize, or Ansible files exist (the repository contains exactly three tracked files — `.gitignore`, `README.md`, `frmCustomer.frm`). Infrastructure is manual by design: README.md records 'Distribution: EXE copied to each laptop by hand', 'No installer', 'File share is a single Windows file server with no failover', and 'compiled on one developer's machine'. Both `has_http_rpc_surface` and `has_auth_surface` are false, so surface-flag calibration applies and this is recorded as INFO.",
+      "gap": "No IaC definition, no change review on infrastructure, and no drift detection — but there is currently no API gateway, IAM, or network integration surface for agents, which is why this calibrates to INFO rather than RISK-QUALITY.",
+      "recommendation": "Define the agent-facing surface (gateway, identity, network, secrets) as code with peer-reviewed changes and drift detection at the time that surface is created in API-Q1.",
       "severity": "Low",
       "priority": "P2",
       "effort": "High",
@@ -877,13 +988,13 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No CI/CD Pipeline",
-      "description": "No HTTP/RPC surface \u2014 API contract testing not applicable. No CI/CD pipeline exists.",
-      "gap": "No CI/CD. Compiled on one developer's machine.",
-      "recommendation": "Implement CI/CD pipeline with contract testing when API layer is built.",
+      "title": "CI/CD with API Contract Testing",
+      "description": "There is no CI/CD pipeline: no `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, or `buildspec.yml` exists in the repository. README.md states 'No tests, no build server; compiled on one developer's machine'. `has_http_rpc_surface` is false, so surface-flag calibration applies: there are no APIs to contract-test and this is recorded as INFO.",
+      "gap": "No automated build, no pipeline, and no breaking-change detection. The absence of any API surface is why this is INFO rather than RISK-QUALITY — but the absence of a build server is itself a key-person dependency.",
+      "recommendation": "Establish an automated build pipeline and add API contract validation to it once the API from API-Q1 exists.",
       "severity": "Low",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "High",
       "phase": 2,
       "evidence": {
         "file": "README.md",
@@ -899,13 +1010,13 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No Rollback Capability",
-      "description": "No deployed HTTP/RPC surface \u2014 deployment rollback not applicable. Manual EXE copying is the deployment.",
-      "gap": "No rollback. Manual deployment only.",
-      "recommendation": "Implement blue/green or canary deployment in modernized architecture.",
+      "title": "Rollback Capability",
+      "description": "There is no deployment mechanism to roll back. Deployment is manual file copying — README.md: 'Distribution: EXE copied to each laptop by hand' and 'No installer; deployment is \"copy the EXE and the .mdb template\"'. There is no blue/green configuration, no canary, no feature flags, and no traffic shifting; recovery from a bad build would require locating and re-copying a prior EXE to every field laptop. `has_http_rpc_surface` is false, so surface-flag calibration applies and this is recorded as INFO.",
+      "gap": "No fast, reliable rollback path exists; recovery time is bounded by manual redistribution to every laptop. There is no deployed HTTP/RPC surface today, which is why this calibrates to INFO.",
+      "recommendation": "Introduce a packaged, versioned release with an automated deploy/rollback path as part of moving the agent-facing logic into the service from API-Q1.",
       "severity": "Low",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "High",
       "phase": 2,
       "evidence": {
         "file": "README.md",
@@ -917,69 +1028,57 @@
       }
     },
     {
-      "question_id": "DISC-Q2",
-      "category": "Discovery & Documentation",
-      "category_display": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "Field Names Reasonably Semantic",
-      "description": "Field names are reasonably semantic (Customers, Name, CreatedBy, CreatedOn). VB6 Hungarian notation for UI controls (txtName, cmdSave) is interpretable.",
-      "gap": "No major naming issues. UI controls use Hungarian notation but database fields are clear.",
-      "recommendation": "Maintain semantic naming in modernized schema.",
-      "severity": "Low",
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "API Test Coverage",
+      "description": "There are no automated tests. The repository contains no test files, test directories, or test framework references, and README.md states outright 'No tests, no build server; compiled on one developer's machine'. The write path in `cmdSave_Click` (frmCustomer.frm lines 24-34) — including its SQL construction and its error handling — has no coverage of input handling, output format, error responses, or edge cases.",
+      "gap": "No test coverage at all on the only data-mutating code path, so behavioural changes (including regressions in SQL construction or error handling) would reach production undetected.",
+      "recommendation": "Extract the data-access logic from the form into a testable unit and establish automated tests covering input handling and failure paths as part of introducing the build pipeline (ENG-Q2).",
+      "severity": "Medium",
       "priority": "P3",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": "27-28"
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "DISC-Q3",
-      "category": "Discovery & Documentation",
-      "category_display": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "No Data Catalog or Metadata Layer",
-      "description": "No data catalog or metadata layer. Schema undocumented beyond what is inferred from INSERT statement.",
-      "gap": "No catalog. No data dictionary. No schema documentation.",
-      "recommendation": "Implement data catalog as part of modernization.",
-      "severity": "Low",
-      "priority": "P3",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "frmCustomer.frm",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "DATA-Q7",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No Data Quality Monitoring \u2014 Known Corruption",
-      "description": "No data quality metrics or monitoring. Known monthly data corruption from concurrent writes.",
-      "gap": "No quality metrics. No completeness monitoring. Monthly corruption events.",
-      "recommendation": "Implement data quality monitoring when migrating to new database.",
-      "severity": "Low",
-      "priority": "P3",
-      "effort": "Low",
+      "effort": "High",
       "phase": 3,
       "evidence": {
         "file": "README.md",
         "lines": null
       },
       "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Maintain a manual regression checklist executed against a staging copy before each hand-distributed release.",
+          "Have the agent perform read-back verification instead of trusting untested write behaviour."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "Encryption at Rest for Agent-Accessible Data",
+      "description": "Customer data at rest is protected only by a legacy Jet database password. `frmCustomer.frm` opens `S:\\CRM\\sales.mdb` with `Provider=Microsoft.Jet.OLEDB.4.0` and `Jet OLEDB:Database Password=crm2005pw` (lines 7-8, 19-21). Jet database passwords are access gating, not encryption — the Access 2003 .mdb format's obfuscation is trivially recoverable and is not equivalent to encryption at rest. The file sits on an SMB share (README.md: 'Microsoft Access 2003 (.mdb) on a SMB file share') with no KMS key, no BitLocker/EFS configuration, and no encryption settings anywhere in the repository; the SQL Server 2012 reporting copy likewise has no documented TDE configuration.",
+      "gap": "The customer dataset is effectively unencrypted at rest on a file share. Anyone who can copy the .mdb file obtains the data, and the shared password offers no meaningful protection.",
+      "recommendation": "Migrate the data to a managed store with encryption at rest under a customer-managed key (e.g. RDS with KMS) and, in the interim, enable volume-level encryption on the file server and tighten share ACLs.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "frmCustomer.frm",
+        "lines": "7-8, 19-21"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Enable BitLocker/EFS on the file server volume and restrict share ACLs to the minimum principal set.",
+          "Keep the agent on a derived, de-identified dataset rather than the primary .mdb until encryption is in place."
+        ]
       }
     }
   ],
@@ -989,49 +1088,42 @@
       "category_id": "API",
       "title": "Structured Response Format",
       "status": "pass",
-      "reason": "No API/serialization surface exists \u2014 informational signal, no finding emitted."
+      "reason": "No API or serialization surface exists (Win32 form with ADODB data access only; no response formatting, no content-type handling) — informational signal, no finding emitted."
     },
     {
       "question_id": "API-Q6",
       "category_id": "API",
       "title": "Asynchronous Operation Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no operations >30s or long-running workflows detected."
+      "reason": "Extended question not triggered — no operations exceeding 30s and no long-running workflows; the only operation is a single-row INSERT in cmdSave_Click."
     },
     {
       "question_id": "API-Q8",
       "category_id": "API",
       "title": "Rate Limit Documentation and Headers",
       "status": "pass",
-      "reason": "No API/HTTP surface to document rate limits for \u2014 informational signal, no finding emitted."
-    },
-    {
-      "question_id": "STATE-Q4",
-      "category_id": "STATE",
-      "title": "Circuit Breakers and Resilience",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 service has no external service dependencies beyond its own Access database."
+      "reason": "System exposes no API/HTTP surface — no endpoints, gateway, throttling, or rate-limit headers to document. Informational signal, no finding emitted."
     },
     {
       "question_id": "STATE-Q7",
       "category_id": "STATE",
       "title": "Graceful Degradation Signaling",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 service is not P0 priority and not on a documented critical path."
+      "reason": "Extended question not triggered — no priority was supplied in additionalPlanContext (not P0) and no evidence places this desktop CRM form on a shared critical path; README.md describes it as a field-sales desktop tool with nightly downstream sync."
     },
     {
       "question_id": "DATA-Q3",
       "category_id": "DATA",
       "title": "Selective Query Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no list/query endpoints with potentially unbounded results exist."
+      "reason": "Extended question not triggered — the system exposes no list or query endpoints (frmCustomer.frm contains a single INSERT and no SELECT), so there are no unbounded result sets to constrain."
     },
     {
       "question_id": "OBS-Q3",
       "category_id": "OBS",
       "title": "Business Outcome Metrics",
       "status": "pass",
-      "reason": "No metrics or telemetry surface exists \u2014 informational signal, no finding emitted."
+      "reason": "System emits no metrics or telemetry of any kind — there is no observability surface to assess (frmCustomer.frm contains no instrumentation and the repository has no monitoring configuration). Informational signal, no finding emitted."
     }
   ],
   "remediation_roadmap": {
@@ -1054,110 +1146,147 @@
           "DATA-Q2",
           "AUTH-Q2",
           "AUTH-Q3",
+          "AUTH-Q4",
           "AUTH-Q5",
           "AUTH-Q7",
           "STATE-Q3",
+          "STATE-Q4",
+          "STATE-Q6",
           "HITL-Q1",
           "HITL-Q2",
           "DATA-Q6"
         ],
-        "summary": "Resolve all 7 BLOCKERs and critical RISK-SAFETY findings. Focus on building an API layer, implementing machine identity, adding audit logging, and establishing data protection controls."
+        "summary": "Establish an agent-callable, authenticated, auditable integration surface: replace direct .mdb access with a service API, introduce machine identity and per-principal credentials, add transactional writes with idempotency, and resolve data scoping and residency. Also closes the identity, concurrency, and blast-radius safety gaps."
       },
       {
         "phase": 2,
         "phase_name": "Safety",
         "findings": [
-          "AUTH-Q4",
-          "STATE-Q6",
           "STATE-Q2",
+          "HITL-Q3",
           "DATA-Q4",
           "DATA-Q5",
           "DISC-Q1",
-          "HITL-Q3",
-          "ENG-Q5",
-          "STATE-Q5",
           "OBS-Q1",
           "OBS-Q2",
-          "ENG-Q1",
-          "ENG-Q2",
-          "ENG-Q3",
-          "API-Q2",
-          "API-Q3"
+          "ENG-Q5"
         ],
-        "summary": "Address remaining RISK-SAFETY findings and RISK-QUALITY items. Implement identity propagation, transaction limits, infrastructure governance, and observability."
+        "summary": "Harden the new surface: parameterized input validation, queryable state, schema versioning, structured logging and alerting, encryption at rest, and a staging environment."
       },
       {
         "phase": 3,
         "phase_name": "Quality",
         "findings": [
           "ENG-Q4",
+          "API-Q2",
+          "API-Q3",
           "API-Q7",
+          "STATE-Q5",
+          "DATA-Q7",
           "DISC-Q2",
           "DISC-Q3",
-          "DATA-Q7"
+          "ENG-Q1",
+          "ENG-Q2",
+          "ENG-Q3"
         ],
-        "summary": "Address quality improvements: test coverage, event emission, data catalog, and data quality monitoring."
+        "summary": "Build out test coverage, event emission, catalog/metadata, data quality baselines, and the IaC/CI-CD governance for the agent-facing surface."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Build a REST API layer replacing direct database access",
+      "action": "Replace direct Access file integration with a service API over a managed datastore",
       "question_ids": [
         "API-Q1",
-        "API-Q4",
+        "API-Q2",
+        "API-Q3",
         "STATE-Q2",
-        "DATA-Q1"
+        "DATA-Q3"
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "The fundamental blocker: no API exists. All other remediation depends on having a programmable interface. Migrate from Access .mdb to a proper database and expose CRUD operations via a REST API with OpenAPI specification."
+      "rationale": "Direct Jet/OLEDB access to an .mdb file on an SMB share cannot be authenticated, scoped, audited, rate-limited, or versioned. Every other remediation depends on an API existing."
     },
     {
-      "action": "Implement machine identity and authorization framework",
+      "action": "Introduce machine identity and remove the shared hardcoded database credential",
       "question_ids": [
         "AUTH-Q1",
         "AUTH-Q2",
         "AUTH-Q3",
+        "AUTH-Q4",
+        "AUTH-Q5",
         "AUTH-Q7"
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "No identity model exists. Implement OAuth 2.0 client credentials, RBAC with scoped permissions, and per-agent identity with revocation capability."
+      "rationale": "A single compiled-in password (crm2005pw) is the whole authorization model; without per-principal identity nothing can be scoped, attributed, or revoked."
     },
     {
-      "action": "Deploy immutable audit logging infrastructure",
+      "action": "Make writes transactional, idempotent, and auditable",
       "question_ids": [
-        "AUTH-Q6",
-        "AUTH-Q5"
+        "API-Q4",
+        "STATE-Q1",
+        "STATE-Q3",
+        "STATE-Q6",
+        "AUTH-Q6"
       ],
       "priority": "P0",
-      "effort": "Medium",
-      "rationale": "No audit trail exists for any operation. Deploy CloudTrail with S3 object lock. Migrate credentials to Secrets Manager. This unblocks compliance requirements."
+      "effort": "High",
+      "rationale": "The only write path is a non-idempotent INSERT with On Error Resume Next against a file store that corrupts under concurrent writes — a retrying agent would duplicate and corrupt data undetectably."
     },
     {
-      "action": "Implement data protection and residency controls",
+      "action": "Scope and classify the customer dataset and determine residency obligations",
       "question_ids": [
         "DATA-Q1",
         "DATA-Q2",
-        "DATA-Q6"
+        "DATA-Q6",
+        "ENG-Q5"
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "Customer PII is fully exposed with no field filtering, no access differentiation, and no residency controls. Implement field-level scoping, role-based access, and region-aware infrastructure."
+      "rationale": "Customer personal data is reachable in full by any credential holder, is unencrypted at rest, and has no documented jurisdiction."
     },
     {
-      "action": "Add transaction management and concurrency controls",
+      "action": "Eliminate the SQL injection path and add structured input validation",
       "question_ids": [
-        "STATE-Q1",
-        "STATE-Q3",
-        "STATE-Q6"
+        "DATA-Q4"
       ],
-      "priority": "P0",
+      "priority": "P2",
+      "effort": "Low",
+      "rationale": "txtName.Text is concatenated directly into an INSERT statement; parameterizing it is a contained, high-value fix independent of the broader migration."
+    },
+    {
+      "action": "Stand up a build pipeline, tests, and a staging environment",
+      "question_ids": [
+        "ENG-Q2",
+        "ENG-Q3",
+        "ENG-Q4",
+        "HITL-Q3",
+        "DISC-Q1"
+      ],
+      "priority": "P2",
       "effort": "High",
-      "rationale": "No transaction support, known data corruption from concurrency, no blast radius limits. Requires database migration to engine with proper ACID support."
+      "rationale": "The binary is compiled on one developer's machine with no tests and a production database path hardcoded as a constant — there is no safe place to validate agent behaviour."
+    },
+    {
+      "action": "Instrument observability for the agent-facing path",
+      "question_ids": [
+        "OBS-Q1",
+        "OBS-Q2"
+      ],
+      "priority": "P2",
+      "effort": "Medium",
+      "rationale": "Errors are swallowed by On Error Resume Next and cleared; agent-initiated failures are currently undiagnosable."
+    },
+    {
+      "action": "Add human-in-the-loop controls for agent-proposed changes",
+      "question_ids": [
+        "HITL-Q1",
+        "HITL-Q2"
+      ],
+      "priority": "P1",
+      "effort": "Medium",
+      "rationale": "Every write commits immediately with no reviewable intermediate state, so there is no application-layer defense in depth beneath the orchestrator."
     }
-  ],
-  "analysis_type": "ara",
-  "repo_name": "legacy-crm-desktop"
+  ]
 }

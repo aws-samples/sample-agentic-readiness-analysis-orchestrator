@@ -5,12 +5,11 @@
 #
 # WHY `atx custom def exec` AND NOT `atx ct`:
 #   A contributor's change lands on the TD definitions IN THIS REPO
-#   (definitions/managed/**) — it is NOT on AWS Transform Continuous Modernization yet.
-#   `atx ct` runs the OLD service-side definitions, so it
-#   CANNOT see the edit under review — it would diff a change it can't observe. To test
-#   the change that's actually proposed, we publish our repo's TD folders as CUSTOM defs
-#   and run `atx custom def exec`, which runs exactly the SKILL.md we ship. Once the TDs
-#   are published to Continuous Modernization, an `atx ct` parity path can replace this.
+#   (definitions/managed/**). `atx ct` runs the version PUBLISHED to AWS Transform
+#   Continuous Modernization, which is never the unmerged edit — so it CANNOT see the
+#   change under review and would diff a change it can't observe. To test the change
+#   that's actually proposed, we publish this repo's TD folders as CUSTOM defs and run
+#   `atx custom def exec`, which runs exactly the SKILL.md we ship.
 #
 # This is the ONE step that needs AWS (creds vended by the AWS Credential Vendor in CI —
 # see harness/README.md). Everything downstream (diff-reports.py, judge.py) is offline.
@@ -186,6 +185,14 @@ _edited_q_file="$(mktemp "${TMPDIR:-/tmp}/harness-edited-q.XXXXXX")"
 # portfolio program recommendation is the ONLY thing a program-library edit can move, so this
 # is the judge's scope hint for a portfolio-TD MR — the D4 analogue of edited-questions.txt.
 _changed_prog_file="$(mktemp "${TMPDIR:-/tmp}/harness-changed-prog.XXXXXX")"
+
+# ‼ UNIT FAILURE LEDGER — the reason this exists. A unit that failed (bad credentials, a DNS
+# resolution failure, a dead exec) used to `warn` and `return 0`, so the script printed "done."
+# and exited 0 having written NO report. Every caller that trusts the exit code — the sharded
+# re-baseline above all — therefore read "did nothing" as "succeeded", which is how a sweep can
+# report four green shards while delivering one slice of results. File-based because --jobs
+# runs units in background subshells and a variable would not survive the return trip.
+_failed_units_file="$(mktemp "${TMPDIR:-/tmp}/harness-failed-units.XXXXXX")"
 trap 'rm -f "${_edited_q_file}" "${_changed_prog_file}"' EXIT
 if [[ "${SCOPE}" == "all" ]]; then
   selected=("${ALL_FIXTURES[@]}")
@@ -661,7 +668,10 @@ run_unit() {
     | grep --line-buffered -vE "${SPINNER_RE}" > "${ulog}"
   local rc=${PIPESTATUS[0]}
   set -e
-  [[ ${rc} -ne 0 ]] && echo "warn: ${analysis} exec failed for ${name} (rc=${rc}, see ${ulog})" >&2
+  if [[ ${rc} -ne 0 ]]; then
+    echo "warn: ${analysis} exec failed for ${name} (rc=${rc}, see ${ulog})" >&2
+    echo "${analysis}/${name} (exec rc=${rc})" >> "${_failed_units_file}"
+  fi
   # Surface the tail on failure so a broken exec is still diagnosable from the job log.
   if ! grep -q "${glob#\*}" "${ulog}" 2>/dev/null; then
     echo "  (${analysis}/${name}: no report marker in atx output — last lines:)" >&2
@@ -690,7 +700,10 @@ run_portfolio_exec() {
     | grep --line-buffered -vE "${SPINNER_RE}" > "${ulog}"
   local rc=${PIPESTATUS[0]}
   set -e
-  [[ ${rc} -ne 0 ]] && echo "warn: ${phase} exec failed (rc=${rc}, see ${ulog})" >&2
+  if [[ ${rc} -ne 0 ]]; then
+    echo "warn: ${phase} exec failed (rc=${rc}, see ${ulog})" >&2
+    echo "${phase} (exec rc=${rc})" >> "${_failed_units_file}"
+  fi
   if ! grep -q "${glob#\*}" "${ulog}" 2>/dev/null; then
     echo "  (${phase}: no report marker in atx output — last lines:)" >&2
     tail -8 "${ulog}" 2>/dev/null | sed 's/^/    /' >&2 || true
@@ -833,6 +846,17 @@ if [[ -s "${_changed_prog_file}" ]]; then
   mkdir -p "${AFTER_DIR}"
   sort -u "${_changed_prog_file}" | paste -sd, - > "${AFTER_DIR}/changed-programs.txt"
   echo "program scope: $(cat "${AFTER_DIR}/changed-programs.txt") → ${AFTER_DIR}/changed-programs.txt" >&2
+fi
+
+if [[ -s "${_failed_units_file}" ]]; then
+  _nfail="$(wc -l < "${_failed_units_file}" | tr -d ' ')"
+  echo "" >&2
+  echo "FAILED: ${_nfail} unit(s) did not produce a report:" >&2
+  sed 's/^/  - /' "${_failed_units_file}" >&2
+  echo "" >&2
+  echo "  Any golden written by this run is PARTIAL — the fixtures above kept their previous" >&2
+  echo "  baseline. Do not treat this as a completed sweep; re-run the listed units." >&2
+  exit 1
 fi
 
 echo "done." >&2

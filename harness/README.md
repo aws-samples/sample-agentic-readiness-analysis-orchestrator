@@ -91,7 +91,7 @@ The `atx` (AWS Transform) step needs AWS access on the GitLab runner.
 
 Instead we use the **AWS Credential Vendor**, which is built into the **shared
 runner fleet**. The runners' jump role
-`arn:aws:iam::<GITLAB_RUNNER_FLEET_ACCOUNT>:role/gitlab-runners-prod` assumes a role **you** create
+`arn:aws:iam::<GITLAB_RUNNER_FLEET_ACCOUNT>:role/<GITLAB_RUNNER_FLEET_ROLE>` assumes a role **you** create
 in your own AWS account, gated by GitLab principal tags.
 
 > ‼ **`<GITLAB_RUNNER_FLEET_ACCOUNT>` is a placeholder.** Substitute the real id from your
@@ -123,7 +123,7 @@ group `agentic-readiness-assessment`, project `agentic-readiness-assessment`:
     {
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::<GITLAB_RUNNER_FLEET_ACCOUNT>:role/gitlab-runners-prod"
+        "AWS": "arn:aws:iam::<GITLAB_RUNNER_FLEET_ACCOUNT>:role/<GITLAB_RUNNER_FLEET_ROLE>"
       },
       "Action": [
         "sts:AssumeRole",

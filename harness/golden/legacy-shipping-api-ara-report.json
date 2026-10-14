@@ -1,72 +1,211 @@
 {
-  "repo_name": "legacy-shipping-api",
-  "analysis_type": "ara",
   "metadata": {
     "analysis_type": "ara",
-    "analysis_date": "2026-08-21",
+    "analysis_date": "2026-10-13",
     "td_version": "agentic-readiness-analysis",
+    "portfolio_name": "legacy-shipping-api",
+    "repo_name": "legacy-shipping-api",
+    "repo_path": "harness/_after/_src/ara/legacy-shipping-api",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
+    "repo_type_justification": "Application source with a deployable entry point (server.js, app.listen(8080)) plus package.json, a Dockerfile, and resource-provisioning IaC (infrastructure/shipping-alb.yaml). Single service.",
     "service_archetype": "data-gateway",
     "service_archetype_source": "auto-detected",
+    "archetype_justification": "No queue consumers and no downstream service fan-out. Owns a persistent MongoDB store that it only reads from (db.collection('rates').find(...)), exposes a filterable read endpoint, and the only POST is a pure arithmetic computation with no persistence.",
     "agent_scope": "read-only",
     "agent_scope_source": "inferred",
-    "portfolio_name": "legacy-shipping-api",
-    "tech_stack": {
-      "language": "JavaScript",
-      "loc": 45,
-      "framework": "Express 3.4.8",
-      "architecture": "Monolith (single EC2 instance)"
-    },
+    "agent_scope_reasoning": "agent_scope was not supplied; inferred from has_write_operations=false. No database writes, message publishing, or filesystem writes exist; POST /quote is a pure calculation with no persistence or side effect.",
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_http_rpc_surface": true,
       "has_auth_surface": true,
       "has_write_operations": false,
       "has_logging_of_user_data": false
-    }
+    },
+    "tech_stack": {
+      "language": "JavaScript (Node.js 0.10.x declared; Node 18 in container)",
+      "loc": 52,
+      "framework": "Express 3.4.8",
+      "architecture": "Single-instance monolithic REST API under forever on EC2, MongoDB 2.4 co-located, internet-facing ALB (HTTP only); undeployed Docker/Kubernetes artifacts present"
+    },
+    "context": "Legacy internal Node.js 0.10 / Express 3 shipping rate REST API (created 2013, last touched 2017), backed by MongoDB 2.4, running under forever on a single EC2 instance behind a hand-written CloudFormation ALB. Containerization artifacts exist but are not deployed."
   },
   "classification": {
     "tier": "Remediation Required",
     "sub_qualifier": null,
     "blocker_count": 1,
-    "risk_safety_count": 8,
+    "risk_safety_count": 9,
     "risk_quality_count": 14,
-    "info_count": 7,
-    "high_count": 1,
-    "medium_count": 22,
-    "low_count": 7,
+    "info_count": 9,
+    "high_count": 10,
+    "medium_count": 14,
+    "low_count": 9,
     "rule_matched": "1-2 BLOCKER → Remediation Required"
   },
   "counts": {
-    "total": 30,
-    "high": 1,
-    "medium": 22,
-    "low": 7
+    "total": 33,
+    "high": 10,
+    "medium": 14,
+    "low": 9,
+    "na": 0,
+    "not_evaluated_extended": 6,
+    "pass": 4
   },
   "findings": [
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "Machine-Readable API Specification",
+      "description": "No OpenAPI, AsyncAPI, GraphQL, or Smithy specification exists. Patterns searched: openapi.*, swagger.*, *.graphql, *.gql, *.smithy, AsyncAPI documents, package.json spec-generation dependencies, and route annotations in server.js — all zero results across the repository's 11 files. The interface is discoverable only by reading the two route definitions in server.js.",
+      "gap": "No machine-readable contract, so agent tool definitions must be hand-authored from source and will drift from implementation.",
+      "recommendation": "Author openapi.yaml covering GET /rates and POST /quote — including the X-Api-Key security scheme, the origin/dest query parameters, the weight/zone body, and response and error schemas — and validate it in CI once a pipeline exists (ENG-Q2).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "package.json",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Hand-author a small OpenAPI 3 document for the two endpoints and check it in — at two routes this is a near-complete, reviewable contract.",
+          "Pin the agent's tool definition to a reviewed spec snapshot and require tool-definition review on any server.js route change."
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "Structured Error Responses",
+      "description": "Error bodies carry only a free-text error string: {error:'invalid api key'} (line 17), {error:'db error'} (line 26), {error:'query error'} (line 33). No error code, no retryable flag or category, no correlation identifier. The code states its own intent — 'swallow most errors, just 500' (line 25). POST /quote has no error path at all.",
+      "gap": "No error code, retryability signal, or field-level detail — an agent cannot distinguish retriable from terminal failures and will retry permanent errors or abandon transient ones.",
+      "recommendation": "Adopt one error envelope across both routes — {code, message, retryable, request_id} — distinguishing connection failures (retryable) from query and validation failures (terminal), and stop collapsing distinct causes into a bare 500.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "server.js",
+        "lines": "15-39"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Define a conservative retry policy in the agent's tool configuration (bounded retries with backoff on 5xx, never on 4xx).",
+          "Document the known error-string-to-meaning mapping as an interim contract for tool authors."
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "Idempotent Write Operations",
+      "description": "The service has no write endpoints. GET /rates is a read and POST /quote (lines 40-48) is a pure arithmetic function of weight and zone that persists nothing and triggers no side effect, so it is naturally idempotent despite the POST verb. No idempotency middleware, idempotency-key handling, or unique business-key constraint exists.",
+      "gap": "No enforced idempotency primitive. The POST verb on /quote is a natural place for a future 'save this quote' behaviour, which would introduce duplicate-on-retry risk with no primitive in place.",
+      "recommendation": "Record the no-write property as an explicit integration assumption, and require an idempotency key on any write endpoint added later before exposing it to an agent.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "server.js",
+        "lines": "40-48"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only, so idempotency of write endpoints is informational only.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "has_write_operations is false — server.js performs no persistence and triggers no side effects, so scope inferred to read-only and API-Q4 resolves to INFO rather than BLOCKER. POST /quote is additionally idempotent in fact, being a pure computation."
+      }
+    },
+    {
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "Structured Response Format",
+      "description": "All responses are JSON via Express 3's legacy res.send(status, body) — raw MongoDB document arrays from GET /rates (line 35) and {quote: '...'} from POST /quote (line 47). No XML, Protobuf, or custom serializer. GET /rates applies no projection, so _id and any other stored field is returned, and quote is returned as a formatted string rather than a number.",
+      "gap": "No response projection (Mongo-internal fields leak into agent context) and the quote is a string, so the 'NaN' case from DATA-Q4 is type-indistinguishable from a valid quote.",
+      "recommendation": "Add an explicit response projection to GET /rates to exclude _id and pin the field set, and return quote as a number with a separate currency field.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "server.js",
+        "lines": "35-47"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q8",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "Rate Limit Documentation and Headers",
+      "description": "No X-RateLimit-* or Retry-After headers are set on any response path in server.js, including the 401 and both 500 paths. infrastructure/shipping-alb.yaml configures no WAF rate rule and no usage plan, and no limit is documented in README.md or CONTAINERIZE.md.",
+      "gap": "An agent has no way to self-throttle and no structured back-off signal — capacity limits surface as timeouts rather than a 429.",
+      "recommendation": "When the WAF rate-based rule from STATE-Q5 is added, return 429 with a Retry-After header and publish the limit in the OpenAPI document from API-Q2.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "server.js",
+        "lines": "15-48"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
     {
       "question_id": "AUTH-Q1",
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Machine Identity Authentication",
-      "description": "The application uses a single static hardcoded API key for all callers with no principal attribution. All consumers share the same key and cannot be distinguished.",
-      "gap": "No machine identity authentication exists. No OAuth2 client credentials, no mTLS, no service accounts, no per-caller identity.",
-      "recommendation": "Replace the shared static API key with per-consumer API keys issued through AWS API Gateway with usage plans, enabling individual caller identification.",
+      "title": "Machine Identity Authentication",
+      "description": "Authentication is a single static shared secret: server.js line 10 declares API_KEY = 'ship-2013-abc123-static' and the middleware at lines 15-20 compares the inbound x-api-key header to that one constant. Every caller presents the identical credential, so the service cannot determine which principal made a request. No OAuth2 client-credentials flow, mTLS, API Gateway authorizer, Cognito app client, or service-account registry exists anywhere in the repository. The ALB terminates plaintext HTTP/80 from 0.0.0.0/0 with no :443 listener (NETSEC-4412 TODO), so the shared key also transits in cleartext across the public internet.",
+      "gap": "No machine identity with per-principal attribution. One shared, non-rotatable, cleartext-transported secret authenticates all callers, so no audit log, authorization decision, or revocation action can be scoped to an individual agent.",
+      "recommendation": "Put the service behind an authenticating front door: add the :443 listener and ACM certificate tracked as NETSEC-4412, issue per-consumer credentials (API Gateway keys with usage plans, or an ALB OIDC / Cognito app client per consumer), and have the edge inject a verified principal identifier that server.js records on every request.",
       "severity": "High",
       "priority": "P0",
-      "effort": "Medium",
+      "effort": "High",
       "phase": 1,
-      "evidence": {"file": "server.js", "lines": "10"},
+      "evidence": {
+        "file": "server.js",
+        "lines": "10-20"
+      },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
         "blocker_remediation": {
-          "immediate": "Replace shared API key with per-consumer API keys via API Gateway usage plans",
-          "target_state": "Each agent/consumer has its own credential with principal attribution logged on every request",
-          "estimated_effort": "Medium",
-          "dependencies": ["AUTH-Q5"]
+          "immediate": "Request the ACM certificate tracked as NETSEC-4412 (long-lead item, blocked on the netsec approval queue), add the :443 listener, and stand up per-consumer credentials at the edge rather than modifying the 2013 middleware first.",
+          "target_state": "Each caller, including each agent identity, authenticates with its own credential via OAuth2 client credentials or mTLS; the principal is resolved at the edge, propagated to the application, and written to every request log line; credentials live in AWS Secrets Manager with rotation and are read from the environment, not a source constant.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "AUTH-Q5",
+            "AUTH-Q2",
+            "AUTH-Q3",
+            "AUTH-Q6",
+            "AUTH-Q7"
+          ]
         }
       }
     },
@@ -75,20 +214,26 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Scoped Permissions",
-      "description": "Single shared API key grants uniform access to all endpoints. No mechanism to differentiate access levels between callers.",
-      "gap": "No scoped permissions. All callers have identical access to GET /rates and POST /quote.",
-      "recommendation": "Introduce API Gateway with per-consumer API keys and usage plans that restrict endpoint access.",
-      "severity": "Medium",
+      "title": "Scoped Permissions (Least Privilege)",
+      "description": "Authorization is binary and global — the middleware in server.js lines 15-20 either rejects with 401 or calls next(), after which every route is fully accessible. There is no role, scope, claim, or per-key permission concept; infrastructure/shipping-alb.yaml defines no resource policy and no IAM roles, and k8s/deployment.yaml defines no service account or RBAC.",
+      "gap": "No mechanism exists to grant a caller narrower access than everything behind the key. An agent identity would inherit the same surface as the partner integrations.",
+      "recommendation": "Once per-principal identity exists (AUTH-Q1), attach a permission set to each principal and evaluate it in the middleware — minimally a per-key allowlist of {method, path} pairs loaded from configuration.",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {"file": "server.js", "lines": "15-20"},
+      "evidence": {
+        "file": "server.js",
+        "lines": "15-20"
+      },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "compensating_controls": ["Deploy API Gateway with per-consumer usage plans", "Implement route-level middleware with permission map"],
-        "remediation_timeline": "30–60 days"
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Enforce scope at the edge for a pilot: an API Gateway or ALB listener rule restricting the agent's key to the GET /rates path only.",
+          "Issue the agent a network-isolated route (separate target group / internal-only listener) so its reachable surface is constrained by topology."
+        ]
       }
     },
     {
@@ -96,473 +241,26 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Action-Level Authorization",
-      "description": "No action-level authorization exists. The single API key check grants full access to all operations equally.",
-      "gap": "No RBAC, no ABAC, no per-action permission checks. Cannot restrict a caller to read-only access.",
-      "recommendation": "Implement method-level authorization via API Gateway resource policies or application middleware.",
-      "severity": "Medium",
+      "title": "Action-Level Authorization",
+      "description": "No action-level authorization exists. There are no canRead/canWrite/canDelete checks, no ABAC or RBAC definitions, and no permission matrix in server.js. The single middleware does not inspect req.method or req.path, so a key holder may call GET /rates and POST /quote interchangeably. The ALB listener has one catch-all forward action with no method-level authorization.",
+      "gap": "Permitted actions cannot be differentiated within a resource. If a write route is added, every existing key holder — including an agent intended as read-only — gains it implicitly on deploy.",
+      "recommendation": "Introduce a default-deny route-level authorization check keyed on the authenticated principal and the HTTP method, evaluated before the handler runs.",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {"file": "server.js", "lines": "15-20"},
+      "evidence": {
+        "file": "server.js",
+        "lines": "15-20"
+      },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "compensating_controls": ["API Gateway resource policies with method-level restrictions", "Application middleware with action permission matrix"],
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "AUTH-Q5",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "Hardcoded Credentials in Source Code",
-      "description": "API key is hardcoded in source code. MongoDB connection string with server IP is also hardcoded. No secrets management system is used.",
-      "gap": "Credentials embedded in source code with no rotation capability. Exposed to anyone with repository access and persists in git history.",
-      "recommendation": "Migrate credentials to AWS Secrets Manager with rotation. Complete k8s Secret integration already referenced in deployment.yaml.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {"file": "server.js", "lines": "10-13"},
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": ["Move to environment variables as interim", "Deploy AWS Secrets Manager with rotation"],
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "AUTH-Q6",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Audit Logging",
-      "description": "No audit logging exists. No request logging, no CloudTrail configuration, no CloudWatch Logs. Only a startup console.log message.",
-      "gap": "No audit trail for API calls. Cannot determine who called what endpoint or when.",
-      "recommendation": "Add structured request logging with caller identity. Configure CloudTrail with log file validation and S3 Object Lock.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {"file": "server.js", "lines": "44"},
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, audit logging important but not deployment-blocking.",
-        "agent_scope": "read-only",
-        "resolution_reasoning": "Read-only agents do not execute write operations requiring compliance-grade audit trails. Audit logging is still important for forensics.",
-        "compensating_controls": ["Enable ALB access logs to S3", "Add request logging middleware"],
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "AUTH-Q7",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Agent Identity Suspension Capability",
-      "description": "Single shared API key with no mechanism to revoke individual identities. Revoking the key disables all consumers simultaneously.",
-      "gap": "No per-identity suspension mechanism. Cannot isolate a misbehaving agent.",
-      "recommendation": "Deploy per-consumer API keys through API Gateway enabling individual key revocation.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {"file": "server.js", "lines": "10"},
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": ["Introduce per-consumer API keys", "Use API Gateway API keys with delete capability"],
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "STATE-Q1",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Compensation or Rollback Logic",
-      "description": "No compensation or rollback logic exists. The system currently has no write operations (POST /quote is pure computation), but no compensation patterns exist if writes are added.",
-      "gap": "No saga pattern, no undo endpoints, no compensating transactions.",
-      "recommendation": "Implement compensation patterns before adding write operations. For current read-only scope, document the architectural decision.",
-      "severity": "Medium",
-      "priority": "P0",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {"file": "server.js", "lines": "34-39"},
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, compensation important but not deployment-blocking for read-only agents.",
-        "agent_scope": "read-only",
-        "resolution_reasoning": "Read-only agents do not execute write workflows. System has no write operations currently. Compensation is relevant for system maturity.",
-        "compensating_controls": ["Scope agent access to read-only operations only", "Implement idempotency if writes are added"],
-        "remediation_timeline": "60–90 days"
-      }
-    },
-    {
-      "question_id": "STATE-Q4",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Circuit Breakers or Resilience Patterns",
-      "description": "No circuit breakers, retry logic, or timeout configuration exists. MongoDB connection opens per-request with no connection pooling, no timeout, and no failure isolation.",
-      "gap": "No resilience patterns for the MongoDB dependency. A database outage causes indefinite request hangs.",
-      "recommendation": "Add MongoDB connection timeout and pooling. Implement circuit breaker pattern (e.g., opossum library).",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {"file": "server.js", "lines": "22-23"},
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": ["Add connection timeout to MongoDB options", "Implement connection pool with health checking"],
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "STATE-Q5",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Rate Limiting",
-      "description": "No rate limiting at any layer. ALB forwards all traffic without throttling. No API Gateway. No application-level rate limiting middleware. No WAF rules.",
-      "gap": "No protection against runaway agent loops or traffic storms at machine speed.",
-      "recommendation": "Deploy API Gateway with throttling (usage plans) or add express-rate-limit middleware.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {"file": "infrastructure/shipping-alb.yaml", "lines": null},
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": ["Add express-rate-limit middleware immediately", "Deploy API Gateway with usage plans and throttle settings"],
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "API-Q2",
-      "category": "API Surface",
-      "category_display": "API & Tooling",
-      "category_id": "API",
-      "title": "No Machine-Readable API Specification",
-      "description": "No OpenAPI, Swagger, AsyncAPI, GraphQL schema, or Smithy specification exists in the repository.",
-      "gap": "Agent frameworks cannot auto-generate tool definitions. Integration requires manual tool authoring.",
-      "recommendation": "Generate an OpenAPI 3.0 specification documenting GET /rates and POST /quote endpoints, parameters, and response schemas.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {"file": "server.js", "lines": null},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "API-Q3",
-      "category": "API Surface",
-      "category_display": "API & Tooling",
-      "category_id": "API",
-      "title": "Unstructured Error Responses",
-      "description": "Error responses are minimal unstructured objects: { error: 'string' }. No error codes, no retryable classification, no field-level detail.",
-      "gap": "Agents cannot distinguish retriable from terminal errors.",
-      "recommendation": "Implement structured error responses with error_code, message, and retryable fields.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {"file": "server.js", "lines": "18-28"},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "DATA-Q3",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No Pagination Support",
-      "description": "GET /rates supports origin/dest filters but returns all matching results via toArray() with no pagination, no limit parameter, no cursor, and no sorting.",
-      "gap": "Unbounded result sets exhaust agent context windows.",
-      "recommendation": "Add limit and offset query parameters with a default maximum result size (e.g., 100 records).",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {"file": "server.js", "lines": "26-30"},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "DATA-Q4",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No Input Validation",
-      "description": "No input validation exists. Query parameters passed directly as MongoDB filter (NoSQL injection vulnerability). POST /quote does not validate numeric inputs.",
-      "gap": "No validation at API boundary. Vulnerable to MongoDB operator injection.",
-      "recommendation": "Add input validation library (joi/express-validator). Sanitize MongoDB query parameters.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {"file": "server.js", "lines": "26"},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "DATA-Q5",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No Temporal Metadata or Freshness Signaling",
-      "description": "No timestamps in API responses. No created_at/updated_at fields. No Cache-Control headers. No data freshness signaling.",
-      "gap": "Agents cannot reason about data freshness or determine when rates were last updated.",
-      "recommendation": "Add updated_at timestamps to rate records and return Last-Modified or X-Data-Age response headers.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {"file": "server.js", "lines": "26-32"},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "DISC-Q1",
-      "category": "Discovery & Documentation",
-      "category_display": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "No Schema Versioning or API Contracts",
-      "description": "No API versioning, no schema files, no database migrations, no changelog, no breaking change detection.",
-      "gap": "API changes can break agent tool bindings silently with no detection mechanism.",
-      "recommendation": "Add URL-based API versioning (/v1/rates). Introduce OpenAPI spec as schema contract.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {"file": "server.js", "lines": "21-39"},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60–90 days"
-      }
-    },
-    {
-      "question_id": "OBS-Q1",
-      "category": "Observability",
-      "category_display": "Observability",
-      "category_id": "OBS",
-      "title": "No Distributed Tracing or Structured Logging",
-      "description": "No distributed tracing (no OpenTelemetry, no X-Ray). No structured logging — only startup console.log. No correlation IDs.",
-      "gap": "Agent-initiated requests are completely invisible. Cannot diagnose failures.",
-      "recommendation": "Add structured JSON logging with request_id correlation. Instrument with X-Ray or OpenTelemetry.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {"file": "server.js", "lines": "44"},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60–90 days"
-      }
-    },
-    {
-      "question_id": "OBS-Q2",
-      "category": "Observability",
-      "category_display": "Observability",
-      "category_id": "OBS",
-      "title": "No Alerting Configuration",
-      "description": "No alerting configuration exists. No CloudWatch alarms. No monitoring integration.",
-      "gap": "System degradation is undetectable. No alerts for error rates or latency.",
-      "recommendation": "Create CloudWatch alarms on ALB 5xx rate and target response time.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {"file": "infrastructure/shipping-alb.yaml", "lines": null},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q1",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "Partial Infrastructure Governance",
-      "description": "CloudFormation template exists for ALB and S3 bucket but lacks governance controls (no PR review gates, no drift detection, no AWS Config rules).",
-      "gap": "IaC exists without change control or drift monitoring.",
-      "recommendation": "Enforce PR review on infrastructure/ changes. Enable CloudFormation drift detection.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {"file": "infrastructure/shipping-alb.yaml", "lines": null},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q2",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "No CI/CD Pipeline",
-      "description": "No CI/CD pipeline exists. Deployment is manual via SSH (forever restart). No contract testing.",
-      "gap": "No automated testing or deployment. API-breaking changes not caught before production.",
-      "recommendation": "Implement CI pipeline with contract tests. Deploy via prepared k8s manifests.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "High",
-      "phase": 2,
-      "evidence": {"file": "package.json", "lines": null},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60–90 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q3",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "No Rollback Capability",
-      "description": "No rollback capability. Manual git pull + forever restart on single EC2. No blue/green, no canary.",
-      "gap": "No fast recovery path for broken deployments.",
-      "recommendation": "Deploy on Kubernetes using prepared k8s manifests for kubectl rollout undo capability.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {"file": "k8s/deployment.yaml", "lines": null},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60–90 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q4",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "No API Test Coverage",
-      "description": "No test files. No test framework in dependencies. Zero test coverage.",
-      "gap": "No automated API tests. Behavior changes undetectable.",
-      "recommendation": "Add integration tests with jest + supertest for GET /rates and POST /quote.",
-      "severity": "Medium",
-      "priority": "P3",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {"file": "package.json", "lines": null},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60–90 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q5",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "No Encryption at Rest",
-      "description": "S3 bucket has no encryption configuration. MongoDB encryption at rest not configured.",
-      "gap": "Data at rest (rate cards in S3, rates in MongoDB) is unencrypted.",
-      "recommendation": "Enable S3 default encryption (SSE-KMS). Migrate to DocumentDB or enable MongoDB encryption.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {"file": "infrastructure/shipping-alb.yaml", "lines": null},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "HITL-Q3",
-      "category": "Human-in-the-Loop",
-      "category_display": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Sandbox/Staging Environment",
-      "description": "No staging environment configured. Dockerfile allows local execution but no production-equivalent staging exists.",
-      "gap": "No safe environment to test agent behavior with realistic data.",
-      "recommendation": "Create staging namespace in k8s with seeded test data.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {"file": "Dockerfile", "lines": null},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "API-Q4",
-      "category": "API Surface",
-      "category_display": "API & Tooling",
-      "category_id": "API",
-      "title": "Idempotency — Informational (Read-Only Scope)",
-      "description": "POST /quote is a pure computation with no side effects. GET /rates is inherently idempotent. Under read-only scope, idempotency is informational only.",
-      "gap": "No formal idempotency key support, but not needed for current read-only scope.",
-      "recommendation": "Plan idempotency support if write endpoints are added.",
-      "severity": "Low",
-      "priority": "P1",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {"file": "server.js", "lines": "34-39"},
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false,
-        "conditional_resolution": "Resolved to INFO: agent_scope=read-only, idempotency informational only.",
-        "agent_scope": "read-only",
-        "resolution_reasoning": "Read-only agents do not execute write operations, so idempotency is informational."
-      }
-    },
-    {
-      "question_id": "API-Q8",
-      "category": "API Surface",
-      "category_display": "API & Tooling",
-      "category_id": "API",
-      "title": "No Rate Limit Documentation or Headers",
-      "description": "No rate limit headers returned in API responses. No rate limit documentation.",
-      "gap": "Agents cannot self-throttle based on remaining capacity.",
-      "recommendation": "Include X-RateLimit-Remaining and Retry-After headers when rate limiting is implemented.",
-      "severity": "Low",
-      "priority": "P3",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {"file": "server.js", "lines": null},
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Restrict the agent to GET via an edge rule (ALB listener-rule condition on HTTP method, or API Gateway method-level key requirement).",
+          "Freeze the route table: treat the addition of any non-GET route as a change requiring agent-integration re-review."
+        ]
       }
     },
     {
@@ -570,18 +268,190 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Identity Propagation (Data-Gateway — Low Impact)",
-      "description": "No identity propagation. No JWT, no token exchange, no on-behalf-of flows. Downgraded to INFO for data-gateway archetype serving reference data.",
-      "gap": "No identity context in requests.",
-      "recommendation": "Low priority for reference-data service. Implement if user-specific data is added.",
+      "title": "Identity Propagation and Delegation",
+      "description": "No identity propagation exists. server.js performs no JWT parsing, reads no Authorization bearer token, and forwards no user-context header — the shared x-api-key is checked and then discarded (lines 15-20), so no principal reaches the handlers. No OAuth2 on-behalf-of or token-exchange flow and no Cognito/Okta dependency in package.json. The service makes no outbound service calls, so there is no propagation hop beyond its own boundary.",
+      "gap": "The service cannot bound a response by an end user's permissions or distinguish an agent acting as itself from an agent acting on behalf of a user. Practical exposure is limited here because the data has no per-user scoping (DATA-Q1 Stage A = No).",
+      "recommendation": "If per-user or per-partner rate entitlements are ever required, accept a propagated identity (verified JWT from the edge) and filter rates by the resulting principal rather than returning the full collection.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Medium",
       "phase": 3,
-      "evidence": {"file": "server.js", "lines": "15-20"},
+      "evidence": {
+        "file": "server.js",
+        "lines": "15-20"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
-        "safety_impact": false
+        "safety_impact": false,
+        "archetype_calibration": "service_archetype=data-gateway — downgraded from RISK-SAFETY to INFO per the question's archetype calibration (read-only query layers are minimally affected by caller identity context)."
+      }
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Credential Management",
+      "description": "The API key is hardcoded at server.js line 10 with the comment 'Static shared API key - hardcoded', and the MongoDB connection string is hardcoded at line 13. No Secrets Manager, SSM Parameter Store, or Vault reference appears in infrastructure/shipping-alb.yaml or package.json, and no rotation exists — the key value is dated 2013. README.md records that MongoDB 2.4 runs with no authentication, bound to 0.0.0.0. k8s/deployment.yaml and k8s/configmap.yaml externalize both values, but CONTAINERIZE.md note 3 confirms the application source still ignores them. No .env file is committed (.gitignore excludes .env*).",
+      "gap": "A long-lived credential is committed to version control, has never been rotated, is transported in cleartext over the public internet, and no secret-store or rotation path exists.",
+      "recommendation": "Change server.js to read API_KEY and MONGO_URL from process.env, store both in AWS Secrets Manager with a rotation schedule, purge the literal from source, rotate the key (treat the committed value as compromised), and enable authentication on the MongoDB instance.",
+      "severity": "High",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "server.js",
+        "lines": "9-13"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Rotate the key immediately and issue the replacement only through the Kubernetes Secret / Secrets Manager path, treating the committed value as revoked.",
+          "Until the source is changed, keep the service off any internet-facing listener so the cleartext credential is not exposed on the public path."
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Immutable Audit Logging",
+      "description": "There is no audit logging of any kind. server.js contains exactly one log statement — console.log('Shipping API listening on 8080') at line 52 — and no request, principal, or outcome logging. No AWS::CloudTrail::Trail, log-file validation, S3 Object Lock, CloudWatch log group, or ALB access logging appears in infrastructure/shipping-alb.yaml. Because all callers share one key (AUTH-Q1), even container stdout could not attribute a request to a principal.",
+      "gap": "No tamper-evident record of who called what. Agent-initiated reads would be indistinguishable from partner traffic and no forensic reconstruction is possible.",
+      "recommendation": "Enable ALB access logging to an S3 bucket with Object Lock immediately, then add structured per-request application logging recording the authenticated principal, method, path, and status once AUTH-Q1 provides a principal.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "infrastructure/shipping-alb.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY (not BLOCKER): agent_scope=read-only.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "has_write_operations is false, so scope inferred to read-only; AUTH-Q6 resolves to its read-only severity of RISK-SAFETY. The absence is total — no application, platform, or edge audit trail exists — but with no write path the compliance exposure is attribution of reads rather than unattributable mutations.",
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Enable ALB access logging to an Object-Locked, encrypted S3 bucket — an immutable edge request trail with no application change.",
+          "Front the agent's traffic with a distinct listener rule or target group so agent requests are at least separable in edge logs by path."
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Agent Identity Suspension",
+      "description": "No per-identity revocation is possible. Because the one shared key is a source-code constant (server.js line 10), revoking it requires editing the source and redeploying, which simultaneously cuts off every partner integration — infrastructure/shipping-alb.yaml records that partner integrations 'were cut over to the :80 listener below and now depend on it'. There are no key-revocation endpoints, API Gateway keys to delete, IAM roles to deactivate, or user pool to disable. README.md describes deployment as git pull plus forever restart over SSH, which 'drops in-flight requests'.",
+      "gap": "A misbehaving agent cannot be isolated without a platform-wide outage — the blast radius of revocation equals the blast radius of the service.",
+      "recommendation": "Move credential validation to a lookup against an external per-consumer store (Secrets Manager entries or API Gateway usage plans) so that disabling one entry revokes exactly one identity with no redeploy.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "server.js",
+        "lines": "10-20"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Place the agent behind its own edge credential (API Gateway key or ALB listener rule on a distinct hostname/path) deletable independently of the shared key.",
+          "Pre-authorize and rehearse a network-level cut (security-group rule removal for the agent's source range) as the documented emergency isolation procedure."
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Compensation and Rollback",
+      "description": "No compensation or rollback capability exists — no saga pattern, two-phase commit, undo endpoint, or compensating transaction in server.js, and package.json declares only express@3.4.8 and mongodb@1.4.7 with no workflow or transaction library. The surface-flag downgrade does not apply because has_http_rpc_surface is true, and the archetype downgrade does not apply because the archetype is data-gateway. Mitigating context: no multi-step write sequence exists today, so the gap is latent.",
+      "gap": "No mechanism to undo a partially completed sequence. Any future write path would be added into a codebase with no rollback primitive and a data tier (mongodb@1.4.7 / MongoDB 2.4) that predates multi-document transactions.",
+      "recommendation": "Record read-only as the explicit, reviewed scope boundary for this service. If writes are introduced, upgrade the data tier to a version supporting transactions and define an explicit compensating operation for every mutating endpoint before exposing it to an agent.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "server.js",
+        "lines": "22-50"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY (not BLOCKER): agent_scope=read-only.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "has_write_operations is false, so scope inferred to read-only and STATE-Q1 resolves to its read-only severity of RISK-SAFETY. The surface-flag INFO downgrade was not applied because it requires both has_write_operations and has_http_rpc_surface to be false, and this service has a live HTTP surface.",
+        "remediation_timeline": "Not required for a read-only pilot; 90–180 days if write scope is contemplated",
+        "compensating_controls": [
+          "Keep the agent integration read-only as an enforced boundary — with no write path there is nothing to compensate.",
+          "Gate any future write endpoint on an agent-safety review requiring a documented compensating action before the route ships."
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Circuit Breakers and Resilience",
+      "description": "server.js line 23 opens a fresh MongoClient.connect inside the GET /rates handler and closes it after each query — no connection pooling, no connectTimeoutMS/socketTimeoutMS, no retry, no exponential backoff, and no circuit breaker. package.json declares no resilience library. On the error path the code 'swallow[s] most errors, just 500' (line 25 comment), so a hung or unreachable database produces connection accumulation and slow 500s rather than a fast, bounded failure.",
+      "gap": "No timeout, retry, or circuit-breaker protection on the sole external dependency. A degraded MongoDB turns this service into a latency sink, and an agent retrying at machine speed would amplify the connection storm.",
+      "recommendation": "Establish a single pooled MongoDB connection at startup with explicit connect and socket timeouts, and wrap the query in a circuit breaker that fails fast with a retryable error code (see API-Q3) when the dependency is unhealthy.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "server.js",
+        "lines": "22-39"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Set an aggressive idle/response timeout on the ALB target group and a client-side timeout in the agent's HTTP client so a hung dependency surfaces as a fast failure.",
+          "Cap agent concurrency against this service (single in-flight request per agent instance) until pooling and timeouts are in place."
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Rate Limiting and Throttling",
+      "description": "No rate limiting exists at any layer. package.json declares no rate-limiting middleware (express-rate-limit, express-slow-down and equivalents absent; dependencies are only express and mongodb), and server.js applies no throttling. infrastructure/shipping-alb.yaml provisions a bare ALB with no WAF web ACL association, no rate-based rule, and no usage plan; k8s/deployment.yaml sets CPU/memory limits and 2 replicas but no request-rate control.",
+      "gap": "Nothing bounds request rate. A runaway agent loop can saturate 2 replicas — or, pre-containerization, the single forever process on one EC2 instance — and exhaust MongoDB connections, since every GET /rates opens a new one.",
+      "recommendation": "Attach a WAF rate-based rule to the ALB as the immediate control, and add per-principal application-level throttling once AUTH-Q1 makes per-principal limits expressible.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "infrastructure/shipping-alb.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Associate an AWS WAF web ACL with a rate-based rule on the ALB — edge throttling with no application change.",
+          "Impose a client-side rate cap in the agent's tool configuration and alarm on breach as an interim bound."
+        ]
       }
     },
     {
@@ -589,18 +459,49 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No Transaction Limits (Read-Only Scope)",
-      "description": "No transaction limits exist. Under read-only scope, agents cannot modify records, so blast radius limits are informational.",
-      "gap": "No business-domain caps on operations.",
-      "recommendation": "Plan transaction limits if write endpoints are added.",
+      "title": "Blast Radius and Transaction Limits",
+      "description": "No business-domain transaction limits exist — no per-caller caps, bulk-operation size limits, or spend thresholds in server.js, infrastructure/shipping-alb.yaml, or k8s/deployment.yaml. There is also nothing for such a limit to bound today: the service modifies no records, moves no money, and deletes nothing. The one unbounded dimension is read volume per call (GET /rates returns the whole filtered collection — see DATA-Q3).",
+      "gap": "No mechanism through which a per-caller business limit could be expressed, since the service cannot distinguish callers at all (AUTH-Q1). Any future write capability would need both identity and a limits mechanism before an agent could be safely scoped to it.",
+      "recommendation": "Treat read-only as the reviewed scope boundary and add a server-enforced result-size cap on GET /rates (DATA-Q3) as the one limit that is meaningful today.",
       "severity": "Low",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 3,
-      "evidence": {"file": "server.js", "lines": null},
+      "evidence": {
+        "file": "server.js",
+        "lines": "22-48"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
-        "safety_impact": false
+        "safety_impact": false,
+        "scope_calibration": "agent_scope=read-only — evaluated as INFO rather than RISK per the question's scope calibration."
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Sandbox/Staging Environment",
+      "description": "No non-production environment exists. There is no docker-compose.yml, staging or sandbox configuration, seed-data script, or synthetic data generator. k8s/namespace.yaml defines exactly one namespace with no environment overlays, Kustomize bases, or Helm values-per-environment. infrastructure/shipping-alb.yaml is a single hand-written stack with no environment parameter, and README.md confirms the application runs on a single EC2 instance deployed by git pull plus forever restart over SSH. CONTAINERIZE.md notes the container artifacts are not yet deployed.",
+      "gap": "No production-equivalent environment to test agent behavior against — the first execution of any agent tool call lands on the single production instance.",
+      "recommendation": "Add a docker-compose.yml pairing the service image with a MongoDB container and a seed script that loads representative rates documents, then promote the same composition into a staging namespace using the existing manifests.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "k8s/namespace.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Use the existing Dockerfile plus a local MongoDB container for disposable local agent tool-call testing before any production call.",
+          "Deploy the existing k8s manifests into a second namespace with a separate MongoDB as a staging target — configuration, not new build work."
+        ]
       }
     },
     {
@@ -608,26 +509,152 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "Sensitive Data Classification — Not Applicable",
-      "description": "System stores shipping rates (origin, destination, pricing) — reference/business data. No PII, PHI, financial instruments, or credentials stored or processed.",
-      "gap": "No data classification needed for current data model.",
-      "recommendation": "Reassess if data model expands to include regulated data.",
+      "title": "Sensitive Data Classification",
+      "description": "Stage A = No. The persistent data is carrier shipping rate reference data — the shipping.rates collection queried only by origin/dest (server.js line 29) and the RateCardBucket rate cards dropped nightly by a partner upload job. There are no user-specific fields, health records, financial instruments, or persisted credentials (the only secret, API_KEY, is a source constant handled under AUTH-Q5); has_logging_of_user_data is false (one startup log line only); and shipping rate lookup is not a regulated data domain. Per the Stage A rule, Stage B was not evaluated and absence of classification controls is not flagged.",
+      "gap": "None gating. Caveat: GET /rates returns unprojected MongoDB documents, so if the nightly rate-card load ever begins including partner-confidential commercial terms or customer-specific negotiated rates, those fields would flow to an agent automatically with no filter in the path.",
+      "recommendation": "Re-run this question if the rates collection or rate-card bucket ever gains customer-identifying or partner-confidential fields, and add an explicit response projection (API-Q5) so field additions cannot silently reach agent callers.",
       "severity": "Low",
       "priority": "P0",
       "effort": "Low",
       "phase": 3,
-      "evidence": {"file": "server.js", "lines": "22-32"},
+      "evidence": {
+        "file": "server.js",
+        "lines": "28-38"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false,
-        "conditional_resolution": "Resolved to INFO: Stage A = No — not a data-handling target.",
+        "conditional_resolution": "Resolved to INFO at Stage A: not a sensitive-data-handling target. Stage B (B1/B2/B3) not evaluated.",
         "agent_scope": "read-only",
-        "resolution_reasoning": "System stores shipping rates (reference data). No PII/PHI/financial/credential data present.",
+        "resolution_reasoning": "Stage A evaluated to No — the only persisted data is commercial carrier rate reference data with no PII, PHI, financial instruments, or credentials, and no user data is logged. Under the DATA-Q1 Stage A rule the question records as INFO and the absence of field-level classification is expected rather than a finding.",
         "data_q1_subchecks": {
-          "b1": {"fired": false, "severity": null, "reasoning": "Stage A = No. Not a data-handling target."},
-          "b2": {"fired": false, "severity": null, "reasoning": "Stage A = No. Skipped."},
-          "b3": {"fired": false, "severity": null, "reasoning": "Stage A = No. Skipped."}
+          "b1": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Not evaluated — Stage A resolved to No, so agent-facing response scoping for sensitive fields is not applicable. No sensitive fields exist to scope out."
+          },
+          "b2": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Not evaluated — Stage A resolved to No. (Access-control coarseness is separately reported under AUTH-Q2 and AUTH-Q3.)"
+          },
+          "b3": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Not evaluated — Stage A resolved to No, so formal classification metadata is not expected for this target."
+          }
         }
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Data Residency and Sovereignty",
+      "description": "The system holds persistent data — the MongoDB shipping.rates collection and the RateCardBucket S3 bucket receiving nightly carrier rate-card uploads — but no residency or sovereignty posture is defined anywhere. There is no region constraint, no GDPR/LGPD reference, no cross-region replication configuration, and no sovereignty statement in README.md, CONTAINERIZE.md, or the CloudFormation template; the bucket's region is implicit in the deploying stack and MongoDB is addressed only by private IP. Mitigating context: the data observed is commercial carrier rate cards, not personal data, so the likely true obligation is low — the finding is that it has never been determined or recorded.",
+      "gap": "No documented residency classification for either data store. An agent integration cannot tell whether transmitting rate data to an LLM endpoint in another region is permissible, and no control prevents it.",
+      "recommendation": "Have the data owner classify the shipping.rates collection and the acme-shipping-rate-cards-* bucket for residency, record the result in the repository, and add explicit region constraints (or an explicit replication prohibition) to infrastructure/shipping-alb.yaml.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "infrastructure/shipping-alb.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY (not BLOCKER): agent_scope=read-only.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "has_write_operations is false, so scope inferred to read-only and DATA-Q2 resolves to its read-only severity of RISK-SAFETY. The surface-flag INFO downgrade does not apply because has_persistent_data_store is true — two persistent stores exist with no residency posture recorded for either.",
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Pin the agent's model endpoint and all telemetry sinks to the same region as the ALB stack and rate-card bucket for the pilot, removing cross-border transfer from the threat model.",
+          "Document a provisional classification ('commercial carrier rate data, no personal data') signed off by the data owner, re-reviewed if the data gains customer-identifying fields."
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Selective Query Support",
+      "description": "GET /rates returns an unbounded result set — server.js lines 30-38 execute db.collection('rates').find(filter).toArray(...) and send the entire array with no limit, skip, offset, or cursor parameter, no sort option, and no server-side maximum. Filtering is limited to two optional equality fields (origin, dest); when both are omitted the filter becomes {origin: undefined, dest: undefined}, which with mongodb@1.4.7 matches on null/missing rather than returning nothing, making the unfiltered response breadth unpredictable.",
+      "gap": "No pagination and no result-size cap. Response size is bounded only by collection size, which can exhaust an agent's context window and inflate token cost.",
+      "recommendation": "Add limit (with a server-enforced default and maximum) and a cursor or skip parameter to GET /rates, build the filter only from parameters actually supplied, and document the result-size ceiling in the OpenAPI spec from API-Q2.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "server.js",
+        "lines": "28-38"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Require the agent's tool definition to always send both origin and dest, making every call a narrow lookup rather than a scan.",
+          "Enforce a response-size ceiling in the agent's HTTP client and treat an oversized response as a tool error rather than feeding it to the model."
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Input Validation and Schema Enforcement",
+      "description": "No validation library is declared in package.json (joi, zod, yup, express-validator, celebrate all absent). GET /rates builds the MongoDB filter directly from the query string at server.js line 29 under the code's own comment 'unvalidated query params passed straight into the filter'; Express 3's query parser produces objects for bracketed parameters, so ?origin[$ne]=x injects a MongoDB operator into the filter with no type check to block it. POST /quote reads req.body.weight and req.body.zone with no presence, type, or range check (lines 41-46) — a missing or non-numeric field yields NaN, which toFixed(2) renders as the string 'NaN' returned with HTTP 200. express.bodyParser() (line 7, deprecated) imposes no explicit payload-size limit, and no API Gateway request validator exists.",
+      "gap": "No systematic validation, no type coercion guard, and no structured rejection. Malformed agent-generated payloads are accepted silently and returned as apparently-successful NaN quotes; query parameters reach the database engine as operators.",
+      "recommendation": "Add schema validation middleware to both routes that coerces and bounds types, rejects unexpected shapes with a structured field-level 400 (per the API-Q3 envelope), and casts origin/dest to strings before they enter the MongoDB filter to close the operator-injection path. Set an explicit body-size limit on the body parser.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server.js",
+        "lines": "28-47"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Validate at the edge for a pilot: an API Gateway request validator or WAF rule set rejecting bracketed query parameters and malformed bodies, with no application change.",
+          "Have the agent's tool definition enforce a strict typed schema and post-validate responses, rejecting any 'NaN' quote as a tool error."
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Temporal Metadata and Freshness",
+      "description": "No temporal metadata or freshness signaling exists. server.js returns rates documents verbatim (line 35) with no projection and no added timestamp; nothing in the repository defines created_at, updated_at, or event_time, and there is no migration or schema file. No Cache-Control, X-Data-Age, last_refreshed, or consistency_level header or field is set, and no NTP configuration appears in the Dockerfile or k8s manifests. This matters concretely because infrastructure/shipping-alb.yaml documents that carrier rate cards are dropped nightly by the partner upload job, so served rates have a real and material age that is never exposed.",
+      "gap": "An agent cannot determine how old a rate is or whether the nightly load succeeded — stale rates are indistinguishable from current ones.",
+      "recommendation": "Stamp loaded_at on rate documents during the nightly ingest, return it with every rate, and set Cache-Control plus an explicit freshness field on GET /rates so an agent can reason about age.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server.js",
+        "lines": "28-38"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Publish the nightly load's completion time out-of-band and have the agent treat rates as valid only within that window.",
+          "Add a response envelope field carrying the collection's last-load timestamp — one additional field on the existing read path, no schema migration."
+        ]
       }
     },
     {
@@ -635,15 +662,67 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No Data Quality Awareness",
-      "description": "No data quality monitoring, profiling, or completeness metrics for the rates collection.",
-      "gap": "No quality score or completeness metric. Rate card freshness depends on nightly upload.",
-      "recommendation": "Monitor rate card upload success and data completeness.",
+      "title": "Data Quality Awareness",
+      "description": "No data quality measurement exists — no dashboard, profiling report, null-rate monitoring, duplicate-detection logic, or freshness SLA. server.js returns whatever find() yields with no completeness or sanity check, and infrastructure/shipping-alb.yaml defines no validation step for the nightly partner upload into RateCardBucket. The ingest path has no observable outcome at all: nothing records whether the nightly load ran, how many rate cards it wrote, or whether it replaced or duplicated prior rows. Suppression-on-absence does not apply because a persistent data store is present.",
+      "gap": "A silently failed or partial nightly load is indistinguishable from a good one, and would be propagated as authoritative pricing.",
+      "recommendation": "Instrument the nightly ingest to emit row counts, null rates on key fields, and a completion timestamp; alarm on a missed or anomalously small load; and expose the resulting freshness and completeness signals on the read path.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "infrastructure/shipping-alb.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Schema Versioning and API Contracts",
+      "description": "Neither the API nor the data schema is versioned. Routes carry no /v1/ prefix and no Accept-Version header is read (server.js lines 22, 40). There is no JSON Schema, Avro, or Protobuf definition, no schema registry reference, and no migration directory — MongoDB is used schemalessly and rates documents are returned verbatim with no declared shape anywhere. There is no CHANGELOG, deprecation notice, or breaking-change detection tooling, and with no CI pipeline (ENG-Q2) no contract check can run. package.json declares version 1.2.0, which versions the package but not the HTTP contract.",
+      "gap": "No versioned contract and no breaking-change detection. A change to the rates document shape or either route would silently break an agent's tool binding with no signal.",
+      "recommendation": "Introduce a /v1/ route prefix, publish the request/response schemas alongside the OpenAPI document from API-Q2, and add an OpenAPI-diff breaking-change gate once a CI pipeline exists (ENG-Q2).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server.js",
+        "lines": "22-40"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Pin the agent to a reviewed snapshot of the response shape and add a response-shape assertion in the tool wrapper so drift surfaces as a tool error.",
+          "Treat server.js as change-controlled: require agent-integration sign-off on any edit to the route handlers or response payloads."
+        ]
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Semantically Meaningful Field Names",
+      "description": "The observable vocabulary is origin and dest (server.js line 29), weight and zone (lines 41-42), and quote (line 47). origin, weight, and quote are self-describing; dest is a clipped abbreviation; and zone is semantically opaque — multiplied by 1.10 as a number with nothing documenting its numbering scheme, valid range, or units. The rates documents returned by GET /rates have no declared schema, so their field names are not knowable from the code. There are no legacy-style codes and no data dictionary.",
+      "gap": "zone and weight units are unknowable from the interface, so an agent will guess — and with no input validation (DATA-Q4) an out-of-range guess returns a confident wrong quote with HTTP 200 rather than an error.",
+      "recommendation": "Document zone (numbering scheme, valid range) and weight (units) in the OpenAPI document from API-Q2, publish the rates document schema, and expand dest to destination behind a backwards-compatible alias if the route is ever versioned.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
-      "evidence": {"file": "infrastructure/shipping-alb.yaml", "lines": null},
+      "evidence": {
+        "file": "server.js",
+        "lines": "28-47"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -654,18 +733,210 @@
       "category": "Discovery & Documentation",
       "category_display": "Discovery & Documentation",
       "category_id": "DISC",
-      "title": "No Data Catalog or Metadata Layer",
-      "description": "No data catalog or metadata layer describes the rates collection or its semantic meaning.",
-      "gap": "Data model must be inferred from source code.",
-      "recommendation": "Document rates collection schema in README or API spec.",
+      "title": "Data Catalog / Metadata Layer",
+      "description": "There is no catalog or metadata layer. No Glue Data Catalog database or crawler appears in infrastructure/shipping-alb.yaml (RateCardBucket is an unregistered, uncatalogued bucket), and there is no DataHub/Collibra/Alation reference, metadata file, data dictionary, or API catalog entry anywhere. Suppression-on-absence does not apply because a persistent data store is present. The only semantic description of the data is prose: the template comment 'Carrier rate cards, dropped here nightly by the partner upload job' and the README summary.",
+      "gap": "No authoritative source for what a rate document contains, where it came from, or what zone means (DISC-Q2), and no lineage from the partner upload to the served response.",
+      "recommendation": "Register the acme-shipping-rate-cards-* bucket in a Glue Data Catalog database to capture the rate-card schema and its nightly-load lineage, and treat the OpenAPI document from API-Q2 as the catalog entry for the API surface.",
       "severity": "Low",
       "priority": "P3",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 3,
-      "evidence": {"file": "server.js", "lines": null},
+      "evidence": {
+        "file": "infrastructure/shipping-alb.yaml",
+        "lines": null
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_display": "Observability",
+      "category_id": "OBS",
+      "title": "Distributed Tracing and Structured Logging",
+      "description": "There is no tracing and no structured logging. package.json declares no OpenTelemetry or X-Ray SDK and no logging library (winston, pino, bunyan, morgan all absent). server.js neither reads nor propagates traceparent or X-Amzn-Trace-Id, emits no request_id or correlation_id, and logs only the startup line at line 52; there is no request logging middleware. No X-Ray sidecar or OTel collector appears in k8s/deployment.yaml, and ALB access logging is not enabled in infrastructure/shipping-alb.yaml.",
+      "gap": "No trace context and no correlatable logs. A failed agent-initiated request leaves no record linking the agent's call to anything inside the service — the only observable is the status code the agent received.",
+      "recommendation": "Enable ALB access logs now, then add a request-scoped logger that emits JSON with a correlation identifier (honouring an inbound X-Amzn-Trace-Id/traceparent when present) on every request and error path.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server.js",
+        "lines": "15-52"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Enable ALB access logging — per-request method, path, status, latency, and the ALB trace identifier with no application change (also serves AUTH-Q6).",
+          "Have the agent generate a client-side correlation identifier and record its own request/response pairs so failures can be reconstructed caller-side."
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_display": "Observability",
+      "category_id": "OBS",
+      "title": "Alerting on Error Rates and Latency",
+      "description": "No alerting is configured. infrastructure/shipping-alb.yaml contains five resources — security group, ALB, target group, HTTP listener, rate-card bucket — and no AWS::CloudWatch::Alarm, SNS topic, composite alarm, or anomaly-detection configuration. There is no PagerDuty or OpsGenie integration and no SLO definition. The only health signal is the target group's HealthCheckPath: /rates with Matcher HttpCode '200,401' — which, because 401 is treated as healthy, confirms liveness but says nothing about correctness, and nothing alarms on it. k8s/deployment.yaml defines TCP-socket probes only, which restart containers but notify no one.",
+      "gap": "No alarm on 5xx rate, latency, or target health. Degradation of a service an agent depends on would be detected only when the agent's own failures are noticed.",
+      "recommendation": "Add CloudWatch alarms on ALB HTTPCode_Target_5XX_Count, p99 TargetResponseTime, and UnHealthyHostCount to infrastructure/shipping-alb.yaml, route them to an on-call SNS topic, and replace the 200/401 health matcher with a dedicated unauthenticated /health route so health and correctness are distinguishable.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infrastructure/shipping-alb.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Monitor from the agent side: alarm on the agent's own tool-call error rate and latency.",
+          "Add CloudWatch alarms on the ALB's already-emitted metrics — no application change or new instrumentation needed."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "Infrastructure Governance for Agent-Facing Surface",
+      "description": "Of the three sub-checks, one is partial and two fail. (1) IaC definition — partial: infrastructure/shipping-alb.yaml defines the ALB, security group, target group, listener, and bucket, and k8s/*.yaml define the undeployed container surface; but the running application is not managed as code (README.md: 'git pull + forever restart over SSH'), the EC2 instance is a stack parameter (AppInstanceId) rather than a managed resource, MongoDB is absent from IaC, and no IAM role or secret is defined as code. (2) Change review — fails: no .github/workflows/, .gitlab-ci.yml, Jenkinsfile, buildspec.yml, CODEOWNERS, or PR template, so no automated plan review or enforced peer review. (3) Drift detection — fails: no AWS Config rules, no drift configuration, and no GitOps reconciler (manifests applied by hand per CONTAINERIZE.md).",
+      "gap": "The agent-facing surface is only partly code-managed, with no enforced review and no drift detection — and the parts most relevant to agent safety (IAM, secrets, the application host, the database) are outside IaC entirely.",
+      "recommendation": "Bring the compute, the MongoDB instance, the IAM roles, and the secrets into the CloudFormation stack (or complete the EKS migration the k8s artifacts anticipate), then add a pipeline that runs cfn-lint and a change-set review on every pull request and enable drift detection on the stack.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "infrastructure/shipping-alb.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Require manual change review with a named approver for infrastructure/ and k8s/ edits as documented team policy.",
+          "Run aws cloudformation detect-stack-drift on the ALB stack on a schedule and review the report."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "CI/CD with API Contract Testing",
+      "description": "There is no CI/CD pipeline at all. Searched for .github/workflows/, .gitlab-ci.yml, Jenkinsfile, buildspec.yml, appspec.yml, and azure-pipelines.yml — none exist among the repository's 11 files. package.json defines a single script, 'start': 'forever start server.js', with no test, lint, or build script. Consequently there is no contract testing, no Pact consumer-driven contract, no OpenAPI validation step, and no breaking-change detection. README.md confirms the deployment path is a manual git pull plus forever restart over SSH, and notes that 'npm install fails against the current registry (old deps unpublished)'.",
+      "gap": "No automated pipeline and no breaking-change gate. A change to either route reaches production with no check that the agent-facing contract still holds.",
+      "recommendation": "Add a pipeline that builds the existing Dockerfile, runs API tests against the container (ENG-Q4), and fails on an OpenAPI diff that breaks the published contract — resolving the npm install registry problem via the pinned Node 18 container build rather than the legacy toolchain.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "package.json",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Adopt the existing Dockerfile as the build artifact and run a manual pre-deploy smoke check of both endpoints against a container before each release.",
+          "Require reviewed tool-definition re-validation whenever server.js changes, making contract verification a human gate."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "Rollback Capability",
+      "description": "There is no engineered rollback path for the deployed service. README.md describes deployment as 'git pull + forever restart over SSH' on a 'single instance' and notes that forever restart 'drops in-flight requests', so recovery means a second manual git operation and another disruptive restart. No traffic shifting, blue/green, canary, feature flags, or CodeDeploy configuration exists. infrastructure/shipping-alb.yaml has a single target group with one target (AppInstanceId) and one catch-all forward action — no weighted target groups, so no traffic-shifting primitive exists at the edge. The k8s manifests would provide kubectl rollout undo and 2-replica rolling updates, but CONTAINERIZE.md states they are not yet deployed.",
+      "gap": "No fast, non-disruptive rollback. Reverting a change that breaks the agent-facing API requires a manual SSH deployment that drops in-flight requests, on a single instance with no second target to shift to.",
+      "recommendation": "Deploy the existing container artifacts to obtain native rollout/rollback semantics, then add weighted target groups (or a canary stage) at the ALB so a bad change can be shifted away from in minutes without a restart.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Keep a known-good commit tagged and a rehearsed, documented manual revert procedure with a measured execution time.",
+          "Complete the EKS migration the existing k8s artifacts anticipate — a 2-replica Deployment provides rollout undo immediately with no new artifacts to author."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "API Test Coverage",
+      "description": "There are no tests of any kind. The repository contains 11 files and no test directory, no *.test.js or *.spec.js file, and no Postman/Newman collection. package.json declares no test framework (mocha, jest, tap, supertest, chai all absent) and no test script. README.md states under Known Issues: 'No tests; no linting'. With no CI pipeline (ENG-Q2) there is nowhere for tests to run. Neither the 401 path, the unbounded GET /rates response, nor the NaN quote behaviour documented in DATA-Q4 is covered by any assertion.",
+      "gap": "Zero automated coverage of the two agent-facing endpoints — input handling, output shape, error responses, and edge cases are all unverified.",
+      "recommendation": "Add a supertest-based suite against the Node 18 container covering both routes' success paths, the 401 path, malformed and missing inputs, and response-shape assertions, and run it in the pipeline from ENG-Q2.",
+      "severity": "Medium",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "package.json",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Maintain a manual test checklist covering both endpoints (valid call, missing key, missing parameters, non-numeric weight) run against a container before each deploy.",
+          "Have the agent's tool wrapper validate response shape and reject anomalies such as a 'NaN' quote."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "Encryption at Rest for Agent-Accessible Data",
+      "description": "Encryption at rest is not configured for either data store. RateCardBucket in infrastructure/shipping-alb.yaml sets PublicAccessBlockConfiguration (all four blocks true — a correct control that is preserved) but declares no BucketEncryption property and no KMS key, so it relies on the account default rather than an explicit, auditable customer-managed key. MongoDB is not in IaC at all — server.js line 13 addresses it as mongodb://10.0.8.20:27017/shipping, and README.md records it as EOL MongoDB 2.4 on the same EC2 instance with no auth enabled, bound to 0.0.0.0. No kms_key_id, KMS key resource, or EBS encryption setting appears anywhere in the repository.",
+      "gap": "No explicit encryption-at-rest configuration for the rate-card bucket or the MongoDB data directory, and no customer-managed key for either.",
+      "recommendation": "Add BucketEncryption with a customer-managed KMS key to RateCardBucket, and migrate the rate data off the EOL in-instance MongoDB 2.4 onto a managed, encrypted, authenticated data tier defined in IaC.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "infrastructure/shipping-alb.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Enable SSE-KMS as a bucket default on acme-shipping-rate-cards-* — a property addition with no application impact.",
+          "Confirm and record the EBS encryption state of the EC2 volume hosting MongoDB; if unencrypted, record it in the pilot's risk acceptance."
+        ]
       }
     }
   ],
@@ -675,151 +946,213 @@
       "category_id": "API",
       "title": "Documented API Interface",
       "status": "pass",
-      "reason": "Application exposes REST endpoints via Express (GET /rates, POST /quote). Integration does not require direct database access or UI automation."
-    },
-    {
-      "question_id": "API-Q5",
-      "category_id": "API",
-      "title": "Structured Response Format",
-      "status": "pass",
-      "reason": "All API responses are JSON via Express res.send() with objects. Well-structured for LLM consumption."
+      "reason": "REST interface exists — Express routes GET /rates (server.js line 22) and POST /quote (line 40) on port 8080, fronted by an ALB target group. No direct-database, file-exchange, or UI-automation integration is required of consumers."
     },
     {
       "question_id": "API-Q6",
       "category_id": "API",
       "title": "Asynchronous Operation Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered — no operations >30s or long-running workflows detected."
+      "reason": "Extended question not triggered — no operation exceeds 30s and no long-running workflow exists. Both handlers are a single MongoDB lookup and an arithmetic expression; no job framework, queue worker, or Step Functions reference in package.json or the IaC."
     },
     {
       "question_id": "API-Q7",
       "category_id": "API",
       "title": "Event Emission for State Changes",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered — data-gateway archetype has no state changes."
+      "reason": "Extended question not triggered — trigger requires stateful-crud or orchestrator archetype; detected archetype is data-gateway and the service produces no state changes to emit events about."
     },
     {
       "question_id": "STATE-Q2",
       "category_id": "STATE",
       "title": "Queryable Current State",
       "status": "pass",
-      "reason": "GET /rates provides queryable access to current shipping rates via MongoDB queries with filter parameters."
+      "reason": "GET /rates (server.js lines 22-39) exposes the authoritative rates collection with origin/dest filters, reading live from MongoDB on each call. No write-only or event-only interface and no caching layer that could desynchronize the response from stored state."
     },
     {
       "question_id": "STATE-Q3",
       "category_id": "STATE",
       "title": "Concurrency Controls",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered — agent_scope is read-only."
+      "reason": "Extended question not triggered — trigger requires write-enabled scope with persistent state; has_write_operations is false (only find() reads and one in-memory calculation), so there is no concurrent-write path to control."
     },
     {
       "question_id": "STATE-Q7",
       "category_id": "STATE",
       "title": "Graceful Degradation Signaling",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered — no P0 priority set and not confirmed on critical path."
+      "reason": "Extended question not triggered — trigger requires P0 priority or critical-path designation; no priority was supplied in additionalPlanContext and no criticality designation appears in README.md or CONTAINERIZE.md."
     },
     {
       "question_id": "HITL-Q1",
       "category_id": "HITL",
       "title": "Draft/Pending State",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered — agent_scope is read-only."
+      "reason": "Extended question not triggered — trigger requires write-enabled scope; has_write_operations is false, so there is no state change for a draft state to hold."
     },
     {
       "question_id": "HITL-Q2",
       "category_id": "HITL",
       "title": "Configurable Approval Gates",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered — agent_scope is read-only."
-    },
-    {
-      "question_id": "DATA-Q2",
-      "category_id": "DATA",
-      "title": "Data Residency and Sovereignty",
-      "status": "pass",
-      "reason": "Shipping rates are business reference data not subject to residency or sovereignty requirements. No regulated personal data."
+      "reason": "Extended question not triggered — trigger requires write-enabled scope; the service executes no operation that could require approval."
     },
     {
       "question_id": "DATA-Q6",
       "category_id": "DATA",
       "title": "PII Redaction in Logs",
       "status": "pass",
-      "reason": "System handles no PII (shipping rates are reference data). No request-level logging exists that could leak user data."
-    },
-    {
-      "question_id": "DISC-Q2",
-      "category_id": "DISC",
-      "title": "Semantically Meaningful Field Names",
-      "status": "pass",
-      "reason": "Field names are semantically meaningful: origin, dest, weight, zone, quote, error. Minor abbreviation (dest) is widely understood."
+      "reason": "No PII-in-logs pathway exists. The data model holds no PII (rates keyed on origin/dest; rate cards hold carrier pricing — DATA-Q1 Stage A = No) and the application performs no request, response, or access logging: server.js has exactly one log statement (startup, line 52) and error paths send a static string without logging. ALB access logging is not enabled, so no user-submitted content reaches any log sink."
     },
     {
       "question_id": "OBS-Q3",
       "category_id": "OBS",
       "title": "Business Outcome Metrics",
       "status": "pass",
-      "reason": "No metrics or telemetry surface exists — informational signal, no finding emitted."
+      "reason": "Informational-absence suppression applied: the system emits no metrics or telemetry of any kind (no put_metric_data, no metrics client in package.json, no dashboard, no StatsD/Prometheus endpoint), so this always-INFO question has no evidence on either side and no finding is emitted. The missing observability surface is already reported under OBS-Q1 and OBS-Q2."
     }
   ],
   "remediation_roadmap": {
-    "phases": [1, 2, 3],
+    "phases": [
+      1,
+      2,
+      3
+    ],
     "items": [
       {
         "phase": 1,
         "phase_name": "Blockers",
-        "findings": ["AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "AUTH-Q5", "AUTH-Q6", "AUTH-Q7", "STATE-Q1", "STATE-Q4", "STATE-Q5"],
-        "summary": "Resolve the AUTH-Q1 BLOCKER (machine identity) and address critical safety risks: scoped permissions, audit logging, rate limiting, and resilience patterns."
+        "findings": [
+          "AUTH-Q1",
+          "AUTH-Q2",
+          "AUTH-Q3",
+          "AUTH-Q5",
+          "AUTH-Q6",
+          "AUTH-Q7",
+          "STATE-Q1",
+          "STATE-Q4",
+          "STATE-Q5",
+          "DATA-Q2"
+        ],
+        "summary": "Establish machine identity with per-principal attribution and TLS at the edge (AUTH-Q1), which unblocks scoped and action-level authorization, audit attribution, and per-identity suspension. In parallel, take the two identity-independent safety wins — a WAF rate-based rule and MongoDB connection pooling with timeouts and a circuit breaker — and record a residency classification for both data stores."
       },
       {
         "phase": 2,
         "phase_name": "Safety",
-        "findings": ["API-Q2", "API-Q3", "DATA-Q3", "DATA-Q4", "DATA-Q5", "DISC-Q1", "OBS-Q1", "OBS-Q2", "ENG-Q1", "ENG-Q2", "ENG-Q3", "ENG-Q5", "HITL-Q3"],
-        "summary": "Improve agent effectiveness: add API specification, input validation, pagination, observability, CI/CD pipeline, and staging environment."
+        "findings": [
+          "API-Q2",
+          "API-Q3",
+          "DATA-Q3",
+          "DATA-Q4",
+          "DATA-Q5",
+          "DISC-Q1",
+          "OBS-Q1",
+          "OBS-Q2",
+          "HITL-Q3",
+          "ENG-Q1",
+          "ENG-Q2",
+          "ENG-Q3",
+          "ENG-Q5"
+        ],
+        "summary": "Make the integration surface contractual and observable: publish an OpenAPI document with a versioned route prefix, add structured errors and input validation (closing the NoSQL operator-injection path), add pagination and freshness metadata, enable ALB access logs and CloudWatch alarms, and establish a staging environment, a CI pipeline with a breaking-change gate, rollback capability, and bucket encryption."
       },
       {
         "phase": 3,
         "phase_name": "Quality",
-        "findings": ["ENG-Q4", "API-Q4", "API-Q8", "AUTH-Q4", "STATE-Q6", "DATA-Q1", "DATA-Q7", "DISC-Q3"],
-        "summary": "Address informational findings and remaining quality improvements: test coverage, documentation, and future-proofing for write operations."
+        "findings": [
+          "API-Q4",
+          "API-Q5",
+          "API-Q8",
+          "AUTH-Q4",
+          "STATE-Q6",
+          "DATA-Q1",
+          "DATA-Q7",
+          "DISC-Q2",
+          "DISC-Q3",
+          "ENG-Q4"
+        ],
+        "summary": "Address agent-effectiveness and design-input items: response projection and numeric quote typing, rate-limit headers, identity propagation for any future per-partner entitlement, business transaction limits, data-quality instrumentation on the nightly ingest, field semantics documentation for zone and weight, a data catalog entry, and API test coverage."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Deploy API Gateway with per-consumer identity and throttling",
-      "question_ids": ["AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "AUTH-Q7", "STATE-Q5"],
+      "action": "Replace the shared static API key with per-consumer machine identity behind a TLS edge",
+      "question_ids": [
+        "AUTH-Q1",
+        "AUTH-Q2",
+        "AUTH-Q3",
+        "AUTH-Q5",
+        "AUTH-Q6",
+        "AUTH-Q7"
+      ],
       "priority": "P0",
-      "effort": "Medium",
-      "rationale": "Resolves the BLOCKER (machine identity) and simultaneously addresses scoped permissions, action-level auth, identity suspension, and rate limiting."
+      "effort": "High",
+      "rationale": "One hardcoded, never-rotated key authenticates every caller over plaintext HTTP, so no authorization, audit, or revocation decision can be scoped to an individual agent. This single change is the prerequisite for six of the ten High-severity findings; the ACM certificate tracked as NETSEC-4412 is the long-lead dependency and should be requested first."
     },
     {
-      "action": "Migrate credentials to AWS Secrets Manager",
-      "question_ids": ["AUTH-Q5"],
+      "action": "Add edge rate limiting and MongoDB resilience controls",
+      "question_ids": [
+        "STATE-Q5",
+        "STATE-Q4",
+        "API-Q8"
+      ],
       "priority": "P1",
       "effort": "Low",
-      "rationale": "Hardcoded credentials in source code are a security vulnerability and block credential rotation."
+      "rationale": "Independent of identity work and the cheapest safety wins available. A WAF rate-based rule on the existing ALB bounds a runaway agent loop with no code change, and pooling the per-request MongoDB connection with explicit timeouts and a breaker stops a degraded database from becoming a latency sink."
     },
     {
-      "action": "Add structured logging and CloudTrail audit trail",
-      "question_ids": ["AUTH-Q6", "OBS-Q1"],
+      "action": "Enable ALB access logging with S3 Object Lock and CloudWatch alarms",
+      "question_ids": [
+        "AUTH-Q6",
+        "OBS-Q1",
+        "OBS-Q2"
+      ],
       "priority": "P1",
-      "effort": "Medium",
-      "rationale": "Enables audit trail for all API operations and provides diagnostic capability for agent-initiated requests."
+      "effort": "Low",
+      "rationale": "Delivers an immutable request trail and error-rate/latency alerting at the edge without modifying the 2013 application, converting three findings from total absence to partial coverage in a single CloudFormation change."
     },
     {
-      "action": "Implement CI/CD pipeline and deploy on Kubernetes",
-      "question_ids": ["ENG-Q2", "ENG-Q3", "HITL-Q3"],
+      "action": "Publish a versioned OpenAPI contract and add input validation with structured errors",
+      "question_ids": [
+        "API-Q2",
+        "API-Q3",
+        "DATA-Q4",
+        "DATA-Q3",
+        "DISC-Q1",
+        "DISC-Q2"
+      ],
+      "priority": "P2",
+      "effort": "Medium",
+      "rationale": "At two endpoints the contract is small enough to author completely. Validation additionally closes the NoSQL operator-injection path at server.js line 29 and stops POST /quote returning a 'NaN' quote with HTTP 200, which is the most likely way an agent would act on a wrong answer."
+    },
+    {
+      "action": "Complete the prepared containerization to obtain staging, rollback, and governance",
+      "question_ids": [
+        "HITL-Q3",
+        "ENG-Q3",
+        "ENG-Q1",
+        "ENG-Q2",
+        "ENG-Q4"
+      ],
       "priority": "P2",
       "effort": "High",
-      "rationale": "Kubernetes manifests already prepared. Enables automated deployment, rollback, and staging environments."
+      "rationale": "The Dockerfile and k8s manifests already exist but are undeployed. Deploying them yields a staging namespace, native rollout/rollback, a code-managed runtime, and a working build path that sidesteps the legacy npm registry problem — resolving five RISK-QUALITY findings from artifacts already in the repository."
     },
     {
-      "action": "Generate OpenAPI specification and add input validation",
-      "question_ids": ["API-Q2", "API-Q3", "DATA-Q4", "DISC-Q1"],
-      "priority": "P2",
-      "effort": "Low",
-      "rationale": "Enables automated tool generation, structured error handling, and protects against injection attacks."
+      "action": "Instrument the nightly rate-card ingest and classify both data stores",
+      "question_ids": [
+        "DATA-Q2",
+        "DATA-Q5",
+        "DATA-Q7",
+        "DISC-Q3",
+        "ENG-Q5"
+      ],
+      "priority": "P1",
+      "effort": "Medium",
+      "rationale": "The served rates come from an unvalidated nightly partner upload with no completion signal, no timestamp, and no residency classification. An agent quoting from a silently failed load would propagate wrong pricing at machine speed, so load observability and freshness exposure matter more here than for a typical read API."
     }
-  ]
+  ],
+  "analysis_type": "ara",
+  "repo_name": "legacy-shipping-api"
 }

@@ -10,12 +10,12 @@ some runs drop them while the body of the report (findings[], evaluations[], cou
 classification, …) is otherwise complete. That coin-flip made an occasional report fail
 validate-contract.py for a reason that has nothing to do with the change under test.
 
-Scope — this is a BRIDGE for the pre-publication MR harness path only. Today the harness
-generates "after" reports with `atx custom def exec` on the edited TDs (they are not yet
-published to Continuous Modernization), and that path is where the envelope coin-flip
-shows up. It runs from collect_report() in run-fixtures.sh; the `atx ct` golden/after path
-never calls it. Once the TDs are published to managed CT, `atx ct` emits the envelope
-consistently and this backfill becomes a permanent no-op — safe to leave in place.
+Scope — this is a BRIDGE for the MR harness path only. The harness generates "after"
+reports with `atx custom def exec` on the EDITED TDs, because an unmerged edit is not in
+the registry for `atx ct` to run; that custom-exec path is where the envelope coin-flip
+shows up. It runs from collect_report() in run-fixtures.sh; the `atx ct` golden path never
+calls it, because `atx ct` emits the envelope consistently — so on that path this backfill
+is already a no-op, and safe to leave in place.
 
 The harness already KNOWS both values without reading the model output at all:
   * analysis_type — the caller passes which analysis it ran (ara|mod|portfolio-ara|portfolio-mod).

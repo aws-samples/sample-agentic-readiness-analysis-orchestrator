@@ -1,6 +1,6 @@
-# Agentic Readiness Analysis Orchestrator
+# Agentic & Modernization Readiness for AWS Transform
 
-Source of truth for the **Agentic Readiness Analysis (ARA)** / **Modernization Readiness Analysis (MODA)** analysis orchestrator, built on [AWS Transform Continuous Modernization](https://docs.aws.amazon.com/transform/) (`atx ct`). This repo holds the managed transformation definitions (TDs) that `ct` runs internally, the custom Execution Plan TD, and the agent skill that orchestrates the full workflow.
+Source of truth for the **Agentic Readiness Analysis (ARA)** and **Modernization Readiness Analysis (MODA)** transformation definitions, built on [AWS Transform Continuous Modernization](https://docs.aws.amazon.com/transform/) (`atx ct`). This repo holds the four managed transformation definitions (TDs) that `ct` runs internally, six custom TDs you invoke by name, and the **modernization-advisor** agent skill that turns their output into advice — which Transform path an estate belongs on, what the two assessments mean together, what order the work goes in, and what nothing has evidence for yet.
 
 **`main` = prod.** What's merged to `main` in `definitions/managed/` is what the AWS Transform service runs.
 
@@ -16,14 +16,17 @@ Source of truth for the **Agentic Readiness Analysis (ARA)** / **Modernization R
 │   │   │   └── references/program-library.md      # AWS Program & GTM Library (runtime-loaded)
 │   │   └── portfolio-modernization-readiness-analysis/
 │   │       └── references/program-library.md
-│   └── custom/                     # custom TDs (atx custom def exec) — you invoke these by name
+│   └── custom/                     # 6 custom TDs (atx custom def exec) — you invoke these by name
 │       ├── eba-execution-plan-generator/          # EBA execution plan TD
 │       ├── bpmn-opportunity-analysis/             # BAO: per-repo BPMN agentic opportunity analysis
 │       ├── portfolio-bpmn-opportunity-analysis/   # portfolio BAO aggregation
-│       └── bridge-analysis/                        # ARA↔MOD bridge (agentic-readiness dividend)
-├── orchestrator/
-│   ├── SKILL.md                    # Claude/agent skill: full ARA/MODA/EBA workflow
-│   └── references/                 # getting-started, ct-workflow, execution-plan, troubleshooting
+│       ├── bridge-analysis/                       # ARA↔MOD bridge (agentic-readiness dividend)
+│       ├── portfolio-interapp-dependency-analysis/ # IAD: inter-app dependency graph from MOD reports
+│       └── containerize-service/                  # example remediation TD (Dockerfile + manifests)
+├── advisor/
+│   ├── SKILL.md                    # Claude/agent skill: the modernization advisor
+│   └── references/                 # transform-paths, assessment-mapping, td-catalog, estate-coverage,
+│                                   # getting-started, ct-operations, execution-plan, troubleshooting
 ├── tools/
 │   └── bpmn-analyzer/              # deterministic BPMN preprocessor (BAO input; Python)
 ├── harness/                         # change-impact harness — advisory, never blocks a merge
@@ -53,6 +56,27 @@ Source of truth for the **Agentic Readiness Analysis (ARA)** / **Modernization R
 
 The AWS-managed definitions that run **inside** `atx ct` — you never invoke them by name. `atx ct analysis run --type agentic-readiness` runs the per-repo ARA TD across every discovered repo, then the portfolio ARA TD aggregates the results (same pattern for `--type modernization-readiness`). The two portfolio TDs load `references/program-library.md` (the AWS Program & GTM Library) at runtime to produce engagement-program recommendations. See [`definitions/managed/README.md`](definitions/managed/README.md).
 
+### Managed vs custom — the split is scope, not purpose
+
+**A managed definition assesses one repository at a time. A custom definition sees the estate.**
+That is the whole distinction, and it is why both exist.
+
+`atx ct` runs the managed definitions for you — discovery, parallel per-repo execution, the
+portfolio roll-up — and needs no setup. What it does **not** do is anything that depends on the
+relationships *between* services: the inter-application dependency graph, the ARA↔MOD bridge,
+program attachment, the execution plan. Those are custom definitions you publish into your own
+account.
+
+Do not read that as "managed assesses, custom plans" — the line is not that clean.
+`portfolio-interapp-dependency-analysis` does **both**: it assesses the relationships (coupling,
+blast radius, foundation services, cycles, and how much of the estate has no evidence at all) and
+produces the migration wave order those constraints force. Its assessment half is what makes the
+sequencing defensible — a wave plan without the graph behind it is a calendar, not a plan.
+
+So: stopping after the managed definitions hands a customer two scores. Running the custom ones
+hands them a sequenced, funded plan with the reasoning attached. The `advisor/` skill below is
+what walks that path.
+
 ### `definitions/custom/` — the custom TDs
 
 Custom TDs run via `atx custom def exec` (not `atx ct analysis run`) because they consume report/model artifacts as input and produce planning or opportunity outputs rather than per-repo findings. You invoke each by name. The table below is the pointer — each TD's `SKILL.md` holds the full `additionalPlanContext` field reference in its Step 0.
@@ -63,29 +87,33 @@ Custom TDs run via `atx custom def exec` (not `atx ct analysis run`) because the
 | [`bpmn-opportunity-analysis`](definitions/custom/bpmn-opportunity-analysis/SKILL.md) | BAO — classifies BPMN 2.0 process steps as agentic-AI opportunities (category + autonomy) | JSON from `tools/bpmn-analyzer/run_analysis.py` (`analysis_report_path`) | Run the analyzer first, then `atx custom def exec -n bpmn-opportunity-analysis -p . -g file://bao-config.yaml -x -t` |
 | [`portfolio-bpmn-opportunity-analysis`](definitions/custom/portfolio-bpmn-opportunity-analysis/SKILL.md) | Aggregates per-repo BAO reports into a portfolio opportunity view | Auto-discovers per-repo BAO reports (no config required) | `atx custom def exec -n portfolio-bpmn-opportunity-analysis -p . -x -t` |
 | [`bridge-analysis`](definitions/custom/bridge-analysis/SKILL.md) | Cross-references portfolio ARA + MOD — shared remediation, modernization dividend, dedup | Portfolio ARA report + portfolio MOD report paths + `portfolio_name` | `atx custom def exec -n bridge-analysis -p . -g file://bridge-config.yaml -x -t` |
+| [`portfolio-interapp-dependency-analysis`](definitions/custom/portfolio-interapp-dependency-analysis/SKILL.md) | IAD — inter-application dependency graph from existing per-repo MOD reports: coupling scores, fan-in/fan-out, blast radius, circular dependencies, and migration wave order | A portfolio root containing per-repo `*-mod-report.json` files (no source scan, no config) | `atx custom def exec -n portfolio-interapp-dependency-analysis -p . -x -t` (the TD runs its own bundled `prepare_corpus.py` first — see its SKILL.md Step 1) |
+| [`containerize-service`](definitions/custom/containerize-service/README.md) | Example remediation TD — generates a Dockerfile and deployment manifests for a service that has none | A repo with no existing Dockerfile; publish it with `--category remediation`, then run via remediation, not analysis | `atx ct remediation create --repo <src>::<repo> --source <src> --transformation-name containerize-service --local` |
 
 The EBA TD is the richest — it needs at least one portfolio report (ARA-only, MODA-only, or both; both gets cross-dependency detection) plus human planning inputs the agent can't infer from code. The other three take only file-path pointers or auto-discover their inputs.
 
-`ct` writes per-repo artifacts into the repo working trees; portfolio output lands only in the source-scoped run tree. The authoritative location of every report is the `report_paths` map on the analysis record (`atx ct analysis get --id <id> --json`), which has sharp edges — markdown-only paths, portfolio `.json`/`.html` in exactly one place, removed `list-artifacts`/`get-artifact` subcommands. [`orchestrator/SKILL.md`](orchestrator/SKILL.md) has the full three-location table and current commands.
+`ct` writes per-repo artifacts into the repo working trees; portfolio output lands only in the source-scoped run tree. The authoritative location of every report is the `report_paths` map on the analysis record (`atx ct analysis get --id <id> --json`), which has sharp edges — markdown-only paths, portfolio `.json`/`.html` in exactly one place, `list-artifacts`/`get-artifact` scoped to managed-infrastructure runs (a Local-mode run stores none). [`advisor/SKILL.md`](advisor/SKILL.md) has the full three-location table and current commands.
 
-The EBA `-g` config (`additionalPlanContext`) carries the execution constraints — team size and timeline (required), plus optional budget, parallel capacity, compliance deadlines, and sequencing overrides. See [`examples/atx-config-exec-plan.yaml`](examples/atx-config-exec-plan.yaml) for the annotated template and [`orchestrator/references/execution-plan.md`](orchestrator/references/execution-plan.md) for the flow that generates it.
+The EBA `-g` config (`additionalPlanContext`) carries the execution constraints — team size and timeline (required), plus optional budget, parallel capacity, compliance deadlines, and sequencing overrides. See [`examples/atx-config-exec-plan.yaml`](examples/atx-config-exec-plan.yaml) for the annotated template and [`advisor/references/execution-plan.md`](advisor/references/execution-plan.md) for the flow that generates it.
 
-### `orchestrator/` — the agent skill
+### `advisor/` — the modernization-advisor skill
 
-A Claude/agent skill ([`orchestrator/SKILL.md`](orchestrator/SKILL.md)) that turns an agent into the orchestrator for the full workflow: source setup → discovery → ARA/MODA analysis → findings → Execution Plan. Reference docs in [`orchestrator/references/`](orchestrator/references/) are read on demand (getting started, ct workflow, execution plan, troubleshooting).
+A Claude/agent skill ([`advisor/SKILL.md`](advisor/SKILL.md), `name: modernization-advisor`) that turns an agent into a Solutions Architect's modernization advisor: frame the estate → route it to the right AWS Transform path → assess on both axes (platform and agentic) → build the dependency graph → sequence waves → attach programs and an execution plan → name the gaps. Reference docs in [`advisor/references/`](advisor/references/) are read on demand (transform paths, assessment mapping, TD catalog, estate coverage, getting started, ct operations, execution plan, troubleshooting).
 
 Install it for Claude Code, then start Claude from the project root:
 
 ```bash
-mkdir -p ~/.claude/skills/ara-moda-orchestrator
-cp -R orchestrator/SKILL.md orchestrator/references ~/.claude/skills/ara-moda-orchestrator/
+mkdir -p ~/.claude/skills/modernization-advisor
+cp -R advisor/SKILL.md advisor/references ~/.claude/skills/modernization-advisor/
 
-# re-copy after pulling; a stale copy confidently calls commands that no longer exist
-diff -q orchestrator/SKILL.md ~/.claude/skills/ara-moda-orchestrator/SKILL.md \
+# re-copy after pulling; a stale copy confidently calls commands the installed CLI does not have
+diff -q advisor/SKILL.md ~/.claude/skills/modernization-advisor/SKILL.md \
   && echo "skill is current" || echo "STALE — re-copy"
 ```
 
-The skill carries the verified `atx ct` behavior — which commands were removed, when a run is genuinely finished, and where reports actually land. Those are the places an agent working from the CLI's own help text gets it wrong, usually in ways that look like success.
+**Keep the clone.** Copying the skill installs the advice; the custom transformation definitions, `prepare_corpus.py`, the BPMN analyzer and the EBA config template live only in this repository, and each custom definition must be published into the account you work in — with `--category analysis`, or `--category remediation` for `containerize-service` — before its name resolves. The setup is in [`advisor/references/td-catalog.md` §0](advisor/references/td-catalog.md#0-what-you-need-on-disk).
+
+The skill carries the verified `atx ct` behavior — which commands exist, when a run is genuinely finished, and where reports actually land. Those are the places an agent working from the CLI's own help text gets it wrong, usually in ways that look like success.
 
 
 ### `harness/` — the change-impact harness
@@ -119,8 +147,9 @@ the reasoning behind each step.
 Prerequisites: AWS credentials (`aws sts get-caller-identity`), the ATX CLI (see the [official install docs](https://docs.aws.amazon.com/transform/)), Node.js 22+, and the `AWSTransformCustomFullAccess` managed policy.
 
 ```bash
-# Check the CLI version (needs ≥ 3.9.0)
-atx --version
+# Check the CLI version. `atx --version` reports the installing tool manager's version,
+# not atx's — resolve the install path instead. There is no `atx update`; re-run the installer.
+readlink -f "$(command -v atx)"      # .../atx/<version>/atx
 
 # Region: only us-east-1 resolves for the definition/credential endpoint
 export AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1
@@ -147,9 +176,31 @@ atx ct findings count --by severity --json
 atx ct findings list --json
 ```
 
-> `atx ct server` is deprecated and hidden — never start it; it blocks the shell on `:8081` and is not required. A hidden `--wait` does exist on `analysis run`, but polling is preferable in agent workflows. Both are covered in [`orchestrator/SKILL.md`](orchestrator/SKILL.md), which is the current source of truth for CLI behavior.
+That is as far as `atx ct` goes on its own. Everything estate-level — the dependency graph, the
+ARA↔MOD bridge, program attachment, the execution plan — is a **custom** definition, which has to
+be published into the account you are working in before its name resolves:
 
-The [`orchestrator/SKILL.md`](orchestrator/SKILL.md) skill walks an agent through the same workflow interactively.
+```bash
+# One publish per definition, per account. Only `containerize-service` differs: it needs
+# --category remediation, because it runs through `atx ct remediation create`.
+name=portfolio-interapp-dependency-analysis
+AWS_REGION=us-east-1 atx custom def publish -n "$name" \
+  --sd definitions/custom/"$name" --category analysis --description "..."
+
+atx custom def get -n "$name" --td "$(mktemp -d)"     # verify it resolves
+
+# Then run it. The dependency graph consumes the per-repo MOD report JSON, not source,
+# so it finishes in minutes rather than hours.
+atx custom def exec -n "$name" -p <portfolio-root> -x -t
+```
+
+Full recipe — all ten definitions, their real inputs, the correct order, and the two config files
+you have to author by hand — is in
+[`advisor/references/td-catalog.md`](advisor/references/td-catalog.md).
+
+> `atx ct server` is deprecated and hidden — never start it; it blocks the shell on `:8081` and is not required. A hidden `--wait` does exist on `analysis run`, but polling is preferable in agent workflows. Both are covered in [`advisor/SKILL.md`](advisor/SKILL.md), which is the current source of truth for CLI behavior.
+
+The [`advisor/SKILL.md`](advisor/SKILL.md) skill walks an agent through the same workflow interactively.
 
 ## Contributing
 

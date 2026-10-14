@@ -5,18 +5,18 @@ ingester contract.
 
 Why this exists
 ---------------
-The 2026-07-16 re-version replaced the full managed TD definitions with schema-less
-SKILL.md stubs. That silently dropped the JSON output contract the ingester reads:
-  * MOD lost the top-level `analysis_type: "mod"` literal + the flat `findings[]` array
-    (CT `parseModReport` fell back to markdown → 0 findings) plus
+The managed TDs emit a JSON output contract that the report consumer reads, and a TD edit
+can break it without breaking anything the TD itself checks. Two ways it has gone wrong:
+  * MOD losing the top-level `analysis_type: "mod"` literal or the flat `findings[]` array
+    (the consumer then falls back to markdown and extracts nothing) plus
     `overall_score`/`evaluations[]`/`categories[]`/`classification{}`/`top_gaps[]`.
-  * ARA `findings[]` became a dict keyed by camelCase category with BLOCKER/RISK/INFO
+  * ARA `findings[]` becoming a dict keyed by camelCase category with BLOCKER/RISK/INFO
     severities instead of a flat array of 12-field records with High/Medium/Low.
 
 This validator is the regression guard: it encodes the contract (read directly from the
 restored managed TDs, which are now the source of truth) and FAILS on any report that
 does not conform — so the drift cannot silently recur. It is intentionally strict about
-the exact deltas the ingester broke on, and lenient about optional/extra fields.
+the exact deltas that have broken before, and lenient about optional/extra fields.
 
 It is deterministic and offline (no AWS, no LLM). Two consumers:
   1. `atx custom def exec` output — the live proof our repo's TDs emit conforming JSON
@@ -145,11 +145,11 @@ def _check_findings_array(v: Violations, data: dict, meta_key: str,
     """The core regression: findings MUST be a flat top-level array of 12-field records."""
     findings = data.get("findings")
     if findings is None:
-        v.err("missing top-level `findings[]` — the ingester reads a flat top-level array "
+        v.err("missing top-level `findings[]` — the report consumer reads a flat top-level array "
               "(this is the exact field that went to 0 after the schema regression)")
         return
     if isinstance(findings, dict):
-        v.err("`findings` is a dict keyed by category — the ingester requires a FLAT "
+        v.err("`findings` is a dict keyed by category — the report consumer requires a FLAT "
               f"top-level array. Keys seen: {sorted(findings)[:6]}")
         return
     if not isinstance(findings, list):
@@ -210,7 +210,7 @@ def _check_rubric_coverage(v: Violations, data: dict, analysis: str) -> None:
     """Per-repo coverage as a SUPERSET contract, by rubric-id membership (not count).
 
     - A rubric id the report failed to answer is a hard error: the assessment is incomplete
-      and the ingester would silently under-cover the rubric.
+      and the consumer would silently under-cover the rubric.
     - An id the report invents that carries a tier-moving native severity (BLOCKER /
       RISK-SAFETY) is a hard error: a phantom must never feed blocker_count / risk_safety_count.
     - Any other invented id is a WARNING, not a failure. The count is not the contract; a
@@ -241,7 +241,7 @@ def _check_analysis_type(v: Violations, data: dict, expected: str) -> None:
     if at is None:
         v.err(f"missing top-level `analysis_type` (must be the literal {expected!r})")
     elif at != expected:
-        v.err(f"`analysis_type` is {at!r} — the ingester requires the literal {expected!r} "
+        v.err(f"`analysis_type` is {at!r} — the report consumer requires the literal {expected!r} "
               f"(the join key is (analysis_type, question_id))")
 
 
@@ -455,7 +455,7 @@ def _iter_targets(paths: list[Path], recurse: bool) -> list[Path]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Validate ARA/MOD report JSON against the ingester contract")
+    ap = argparse.ArgumentParser(description="Validate ARA/MOD report JSON against the report-output contract")
     ap.add_argument("paths", nargs="+", type=Path, help="report file(s) or dir(s)")
     ap.add_argument("--analysis", choices=("ara", "mod", "portfolio-ara", "portfolio-mod"),
                     help="force analysis type (else inferred)")

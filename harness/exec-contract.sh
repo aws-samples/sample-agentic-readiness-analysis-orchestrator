@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 #
 # exec-contract.sh — run OUR fixed managed TDs against a repo via `atx custom def exec`
-# and validate the emitted JSON against the ingester contract.
+# and validate the emitted JSON against the report-output contract.
 #
 # WHY THIS EXISTS (and why NOT `atx ct`):
-#   The fixed TD definitions currently live ONLY in this repo — they are not yet
-#   published to AWS Transform Continuous Modernization. So `atx ct` (which
-#   run-fixtures.sh drives) still runs the OLD service-side definitions and emits the
-#   drifted 3.7.0 shape — it cannot exercise our edits. To test the contract TODAY we
-#   publish our repo's TD folders as CUSTOM defs and run `atx custom def exec`, which
-#   runs exactly the SKILL.md we ship. Once the fixed TDs are published to Continuous
-#   Modernization, `atx ct` + the golden path will validate the same contract end-to-end.
+#   `atx ct` runs the TD version PUBLISHED to AWS Transform Continuous Modernization,
+#   which is never the edit under review — an unmerged change is by definition not in the
+#   registry. So `atx ct` would validate the contract of the published TD, not of the
+#   proposed one. To exercise the edit itself we publish this repo's TD folders as CUSTOM
+#   defs and run `atx custom def exec`, which runs exactly the SKILL.md we ship. This is a
+#   permanent property of reviewing a change, not a gap waiting on a publish.
 #
 # Covers all FOUR managed TDs: per-repo ARA + MOD, then portfolio ARA + MOD (which
 # aggregate the per-repo *-{ara,mod}-report.json produced by the first stage).
@@ -155,7 +154,7 @@ fi
 
 echo "" >&2
 if [[ "${OVERALL}" -eq 0 ]]; then
-  echo "exec-contract: all analyses conform to the ingester contract." >&2
+  echo "exec-contract: all analyses conform to the report-output contract." >&2
 else
   echo "exec-contract: at least one analysis violated the contract (see above)." >&2
 fi

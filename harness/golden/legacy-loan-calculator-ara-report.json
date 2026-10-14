@@ -1,47 +1,52 @@
 {
+  "repo_name": "legacy-loan-calculator",
+  "analysis_type": "ara",
   "metadata": {
     "analysis_type": "ara",
-    "analysis_date": "2026-08-21",
+    "analysis_date": "2026-10-13",
     "td_version": "agentic-readiness-analysis",
-    "repo_name": "legacy-loan-calculator",
+    "portfolio_name": "unspecified",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
+    "repo_type_justification": "Application source with a deployable web entry point (Struts Action mapped in WEB-INF/struts-config.xml, packaged as a WAR per README) and no sibling service units. Classified as application.",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
+    "archetype_justification": "LoanAction opens a JDBC connection to Oracle and performs an INSERT of business entities (loan applications) carrying user-specific data; no message consumers and no multi-service fan-out.",
     "agent_scope": "write-enabled",
     "agent_scope_source": "inferred",
-    "portfolio_name": null,
-    "tech_stack": {
-      "language": "Java 5",
-      "loc": 55,
-      "framework": "Apache Struts 1.3 (EOL 2013)",
-      "architecture": "Monolithic WAR on WebLogic 10.3"
-    },
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_http_rpc_surface": true,
-      "has_auth_surface": false,
+      "has_auth_surface": "unknown",
       "has_write_operations": true,
       "has_logging_of_user_data": false
+    },
+    "language": "Java",
+    "loc": 76,
+    "tech_stack": {
+      "language": "Java 5",
+      "loc": 76,
+      "framework": "Apache Struts 1.3 (JSP/ActionForm)",
+      "architecture": "Monolithic WAR on Oracle WebLogic 10.3 with direct JDBC to Oracle 11g"
     }
   },
   "classification": {
     "tier": "Not Agent-Integrable",
     "sub_qualifier": null,
-    "blocker_count": 6,
-    "risk_safety_count": 13,
+    "blocker_count": 7,
+    "risk_safety_count": 11,
     "risk_quality_count": 14,
-    "info_count": 5,
-    "high_count": 6,
-    "medium_count": 27,
-    "low_count": 5,
+    "info_count": 6,
+    "high_count": 18,
+    "medium_count": 14,
+    "low_count": 6,
     "rule_matched": "\u22653 BLOCKER \u2192 Not Agent-Integrable"
   },
   "counts": {
-    "total": 38,
-    "high": 6,
-    "medium": 27,
-    "low": 5
+    "high": 18,
+    "medium": 14,
+    "low": 6,
+    "total": 38
   },
   "findings": [
     {
@@ -49,560 +54,27 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Programmatic API \u2014 Struts Form-Based HTML Interface Only",
-      "description": "The application exposes only an Apache Struts 1.3 form-based HTML interface at /loan. No REST, GraphQL, or AsyncAPI endpoint exists. Integration requires UI automation or direct database access.",
-      "gap": "No programmatic API. Only Struts ActionForm accepting HTTP POST with HTML JSP responses.",
-      "recommendation": "Create a REST API layer (Spring Boot or JAX-RS) that exposes loan pricing and application submission as JSON endpoints, documented with OpenAPI specification.",
-      "severity": "High",
-      "priority": "P0",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "WEB-INF/struts-config.xml",
-        "lines": "7-16"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "blocker_remediation": {
-          "immediate": "Create a REST API layer exposing loan pricing and submission as JSON endpoints.",
-          "target_state": "RESTful API with JSON request/response bodies, documented with OpenAPI specification.",
-          "estimated_effort": "High",
-          "dependencies": [
-            "Requires modernizing from Struts 1.3 to a supported framework"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "API-Q4",
-      "category": "API Surface",
-      "category_display": "API & Tooling",
-      "category_id": "API",
-      "title": "No Idempotency Support for Write Operations",
-      "description": "The saveApplication() method performs a direct INSERT with no idempotency key, no deduplication check, and no unique constraint. Repeated submissions create duplicate records.",
-      "gap": "No idempotency mechanism \u2014 no idempotency key header, no unique business key constraint, no deduplication logic.",
-      "recommendation": "Add idempotency key support and unique business key constraints to all write endpoints.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "45-53"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no idempotency mechanism",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agents retry on failure. Non-idempotent INSERT will create duplicate loan applications on retry.",
-        "blocker_remediation": {
-          "immediate": "Add unique constraint on business key combination (applicant + principal + term).",
-          "target_state": "All write endpoints accept idempotency key header; duplicates return original result.",
-          "estimated_effort": "Medium",
-          "dependencies": [
-            "API-Q1"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "AUTH-Q1",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Machine Identity Authentication",
-      "description": "The application has no machine identity authentication. It relies on container-managed authentication via WebLogic (request.getRemoteUser()) with no support for service accounts, API keys, OAuth client credentials, or mTLS.",
-      "gap": "No service account authentication, no API key support, no OAuth2 client credentials, no mTLS. Only WebLogic container-managed human user authentication.",
-      "recommendation": "Implement OAuth2 client credentials flow or API key authentication with principal attribution for machine callers.",
+      "title": "Documented API Interface",
+      "description": "The only callable surface is a Struts 1 HTML form action: struts-config.xml maps path '/loan' to com.acme.loan.LoanAction with forwards to quote.jsp and confirm.jsp. No REST controller, GraphQL schema, AsyncAPI spec or RPC service exists anywhere in the repository (searched for @RestController/@Path/servlet REST mappings, *.graphql, *.smithy, openapi.*/swagger.*). Integration therefore requires HTML form posting and JSP screen scraping, or direct Oracle access using the credentials embedded in LoanAction.java.",
+      "gap": "No machine-callable API. The business logic (amortization calculation and application submission) is only reachable through a browser-oriented Struts action bound to JSP views.",
+      "recommendation": "Extract the pricing and submission logic from LoanAction.execute into a service class and expose it over a documented JSON/HTTP API (or a facade service in front of the WAR) so agent tools bind to a contract rather than to JSP markup.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "38"
+        "lines": "26-45"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
         "blocker_remediation": {
-          "immediate": "Implement OAuth2 client credentials or API key authentication for machine callers.",
-          "target_state": "Agent identities authenticated via dedicated service credentials with principal attribution.",
+          "immediate": "Extract the pricing and submission logic from LoanAction.execute into a service class and expose it over a documented JSON/HTTP API (or a facade service in front of the WAR) so agent tools bind to a contract rather than to JSP markup.",
+          "target_state": "Control present and verifiable for every agent-invoked call to the loan pricing/submission surface.",
           "estimated_effort": "High",
-          "dependencies": [
-            "API-Q1"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "AUTH-Q6",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Audit Logging for Write Operations",
-      "description": "The application has zero logging. No audit trail exists for write operations. The saveApplication() method performs an INSERT without logging the authenticated principal, operation, or request context.",
-      "gap": "No audit logging whatsoever. No log statements, no logging framework, no CloudTrail, no immutable log storage.",
-      "recommendation": "Implement structured audit logging for all write operations with principal attribution, stored in tamper-evident storage.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agents must have full audit attribution. Zero logging means agent actions are undetectable and unauditable.",
-        "blocker_remediation": {
-          "immediate": "Add structured audit logging for all write operations.",
-          "target_state": "Immutable audit trail (CloudTrail or equivalent) logging every write with principal attribution.",
-          "estimated_effort": "Medium",
-          "dependencies": [
-            "AUTH-Q1"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "STATE-Q1",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Compensation or Rollback for Write Operations",
-      "description": "The saveApplication() method performs a single INSERT with no compensation or rollback mechanism. No saga pattern, no compensating transaction, no undo endpoint.",
-      "gap": "No rollback capability, no compensating transactions, no saga pattern, no undo operations.",
-      "recommendation": "Implement transaction management with proper rollback on failure and compensating operations (cancel/void).",
-      "severity": "High",
-      "priority": "P0",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "45-53"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no rollback mechanism",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agents executing multi-step workflows leave partial state on failure without compensation.",
-        "blocker_remediation": {
-          "immediate": "Implement transaction management with rollback. Add compensating operations.",
-          "target_state": "Multi-step operations support compensation or rollback. Failed workflows do not leave partial state.",
-          "estimated_effort": "Medium",
-          "dependencies": [
-            "API-Q1"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "DATA-Q2",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No Data Residency Controls for Financial PII",
-      "description": "Financial loan application data (applicant names, loan amounts) stored in on-prem Oracle with no residency controls, no sovereignty policies, no mechanisms preventing agent transmission to LLM in different jurisdiction.",
-      "gap": "No data residency controls, no sovereignty policies, no regional data handling configuration.",
-      "recommendation": "Document data residency requirements. Implement data classification. Configure regional LLM endpoints within compliance boundaries.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "22"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND financial PII with no residency controls",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agent accessing financial PII could transmit regulated data to LLM in different jurisdiction with no protective boundary.",
-        "blocker_remediation": {
-          "immediate": "Document data residency requirements for financial data.",
-          "target_state": "Data residency policies enforced. Agent integrations use regional LLM endpoints within compliance boundaries.",
-          "estimated_effort": "Medium",
           "dependencies": []
         }
-      }
-    },
-    {
-      "question_id": "AUTH-Q2",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Scoped Permissions \u2014 All Users Have Identical Access",
-      "description": "No scoped permissions exist. All authenticated users have identical access to all operations. No mechanism to grant agent identity read-only or resource-specific access.",
-      "gap": "No RBAC, no ABAC, no IAM policies, no per-caller permission differentiation.",
-      "recommendation": "Implement role-based access control or deploy API Gateway with IAM policies differentiating agent permissions.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Deploy API Gateway with IAM-based resource policies",
-          "Implement reverse proxy with path-based authorization"
-        ]
-      }
-    },
-    {
-      "question_id": "AUTH-Q3",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Action-Level Authorization",
-      "description": "No action-level authorization. Single Struts action handles both read (pricing) and write (submission) with no permission check before write operation.",
-      "gap": "No read/write permission differentiation, no action-level access control.",
-      "recommendation": "Split pricing and submission into separate endpoints with distinct authorization requirements.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "36-40"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Separate read/write into distinct endpoints",
-          "Add API Gateway with method-level authorization"
-        ]
-      }
-    },
-    {
-      "question_id": "AUTH-Q4",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Identity Propagation or Delegation",
-      "description": "No identity propagation. Uses request.getRemoteUser() with no token exchange, no on-behalf-of flows, no distinction between agent-as-self and agent-on-behalf-of-user.",
-      "gap": "No JWT parsing, no OAuth2 delegation, no token exchange, no identity type distinction.",
-      "recommendation": "Implement OAuth2 token exchange with claims distinguishing actor type (agent vs. human).",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "High",
-      "phase": 2,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "38"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "90\u2013120 days",
-        "compensating_controls": [
-          "Implement JWT-based identity propagation",
-          "Add X-On-Behalf-Of headers with validation"
-        ]
-      }
-    },
-    {
-      "question_id": "AUTH-Q5",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "Hardcoded Database Credentials in Source Code",
-      "description": "Database credentials hardcoded as static final constants: DB_URL, DB_USER ('loan_app'), DB_PASS ('loanApp2010') in LoanAction.java lines 22-24. Committed to version control with no rotation.",
-      "gap": "Credentials hardcoded in source. No Secrets Manager, no Vault, no rotation, no encryption.",
-      "recommendation": "Remove hardcoded credentials immediately. Migrate to AWS Secrets Manager with automatic rotation. Rotate exposed password.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "22-24"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Immediately rotate exposed credentials",
-          "Move to Secrets Manager with automatic rotation"
-        ]
-      }
-    },
-    {
-      "question_id": "AUTH-Q7",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Agent Identity Suspension Mechanism",
-      "description": "No identity suspension mechanism. Cannot revoke individual agent identities without shutting down the entire application. No API keys, no service accounts to disable.",
-      "gap": "No identity revocation, no API key management, no service account disable mechanism.",
-      "recommendation": "Implement API key management or OAuth2 client credentials with individual identity revocation.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Deploy API Gateway with API key management",
-          "Implement IP-based blocking at WAF/load balancer"
-        ]
-      }
-    },
-    {
-      "question_id": "STATE-Q3",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Concurrency Controls for Write Operations",
-      "description": "No concurrency controls. Raw INSERT with no optimistic locking, no version fields, no ETags, no conditional writes. Concurrent agent instances could create race conditions.",
-      "gap": "No optimistic locking, no version fields, no conditional writes, no conflict detection.",
-      "recommendation": "Add optimistic locking with version columns and unique constraints on business keys.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "45-53"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Add unique constraints on business key combinations",
-          "Implement optimistic locking with version columns"
-        ]
-      }
-    },
-    {
-      "question_id": "STATE-Q4",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Circuit Breakers or Resilience Patterns",
-      "description": "No resilience patterns. Raw JDBC connection on every request (DriverManager.getConnection()) with no connection pooling, no timeout, no retry, no circuit breaker.",
-      "gap": "No circuit breakers, no retry logic, no timeout configuration, no connection pooling.",
-      "recommendation": "Replace direct DriverManager with connection pool. Add timeout and circuit breaker around database calls.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "46-47"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Implement connection pooling with timeout config",
-          "Deploy circuit breaker pattern around database calls"
-        ]
-      }
-    },
-    {
-      "question_id": "STATE-Q5",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Rate Limiting or Throttling at Any Layer",
-      "description": "No rate limiting at any layer. No API Gateway, no WAF, no rate-limiting middleware. Runaway agent loop could submit unlimited loan applications.",
-      "gap": "Application completely unprotected from traffic storms.",
-      "recommendation": "Deploy API Gateway with usage plans and throttling. Add WAF rate rules.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "WEB-INF/struts-config.xml",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Deploy API Gateway with throttling",
-          "Implement WebLogic connection limits"
-        ]
-      }
-    },
-    {
-      "question_id": "STATE-Q6",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Blast Radius or Transaction Limits",
-      "description": "No transaction limits or blast radius controls. No per-caller operation caps, no business-level safeguards. Agent error could submit thousands of applications.",
-      "gap": "No per-caller transaction limits, no bulk operation caps, no business-domain caps.",
-      "recommendation": "Implement configurable per-agent business transaction limits (e.g., max_applications_per_hour).",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Implement per-session submission limits",
-          "Deploy API Gateway usage plans with per-caller quotas"
-        ]
-      }
-    },
-    {
-      "question_id": "HITL-Q1",
-      "category": "Human-in-the-Loop",
-      "category_display": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Draft/Pending State for Agent-Proposed Writes",
-      "description": "No draft or pending state. saveApplication() immediately commits loan application to database. No intermediate state for human review.",
-      "gap": "No PENDING/DRAFT status, no two-step commit, no approval workflow.",
-      "recommendation": "Add status-based workflow with PENDING state for agent-submitted applications requiring human approval.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "45-53"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Add status column with PENDING/APPROVED states",
-          "Implement two-step API: create-then-confirm"
-        ]
-      }
-    },
-    {
-      "question_id": "HITL-Q2",
-      "category": "Human-in-the-Loop",
-      "category_display": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Configurable Approval Gates",
-      "description": "No configurable approval gates. All submissions processed immediately without configurable review step. No mechanism to require human approval for high-risk operations.",
-      "gap": "No approval API endpoints, no configurable operation-level flags, no human-in-the-loop workflow.",
-      "recommendation": "Implement configurable approval gates per operation type or business rule (e.g., loan amount threshold).",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "37-39"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Route high-value loans to human approval queue",
-          "Add Step Functions with human approval tasks"
-        ]
-      }
-    },
-    {
-      "question_id": "DATA-Q1",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No Access Control Differentiation for Sensitive Financial Data",
-      "description": "Financial PII stored (applicant names, loan amounts). B1 CLEAR (no read API returns sensitive data). B2 fires: no access control differentiates sensitive vs non-sensitive data access. B3: no formal classification (INFO).",
-      "gap": "No access control differentiation between sensitive and non-sensitive data (B2).",
-      "recommendation": "Implement access control differentiation for sensitive financial data with OAuth scopes or RBAC.",
-      "severity": "Medium",
-      "priority": "P0",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "48-50"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to RISK-SAFETY: Stage A=Yes (financial PII stored), B1=CLEAR (no read API returns sensitive data), B2=RISK-SAFETY (no access differentiation)",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "Financial PII (applicant names, loan amounts) stored. B1 clear because no read endpoints exist. B2 fires because single shared permission grants full access.",
-        "data_q1_subchecks": {
-          "b1": {
-            "fired": false,
-            "severity": null,
-            "reasoning": "No read API endpoints return stored sensitive data \u2014 only writes and confirmation page."
-          },
-          "b2": {
-            "fired": true,
-            "severity": "RISK-SAFETY",
-            "reasoning": "No access controls distinguish sensitive from non-sensitive data access. Single shared permission for all."
-          },
-          "b3": {
-            "fired": true,
-            "severity": "INFO",
-            "reasoning": "No formal data classification metadata exists."
-          }
-        },
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Implement RBAC separating loan data access from admin",
-          "Add OAuth scopes separating data domains"
-        ]
-      }
-    },
-    {
-      "question_id": "DATA-Q6",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "PII Leakage Risk Through Unhandled Exception Paths",
-      "description": "No PII redaction controls. SQL string concatenation with applicant names means PII can leak through database error messages, stack traces, and WebLogic server logs via unhandled exceptions.",
-      "gap": "No log scrubbing, no PII masking, no structured error handling preventing PII leakage through exception paths.",
-      "recommendation": "Implement structured error handling preventing PII from leaking through exceptions. Add PII masking for any log output.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "48-50"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Add try-catch with sanitized error messages",
-          "Implement global exception handler stripping PII"
-        ]
       }
     },
     {
@@ -610,22 +82,26 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Machine-Readable API Specification",
-      "description": "No machine-readable API specification exists. No OpenAPI, Swagger, AsyncAPI, GraphQL schema, or Smithy model found.",
-      "gap": "No machine-readable spec. Agent tool generation requires manual work.",
-      "recommendation": "Generate OpenAPI specification as part of API modernization (dependent on API-Q1).",
+      "title": "Machine-Readable API Specification",
+      "description": "No OpenAPI, Swagger, AsyncAPI, GraphQL or Smithy artifact exists. The repository contains 4 files total; the only interface description is the Struts action mapping in struts-config.xml, which describes forwards to JSP pages, not request/response schemas. No spec-generating dependency is present (no dependency manifest at all \u2014 README states jars are committed to /lib with no version manifest).",
+      "gap": "There is no machine-readable contract from which agent tool definitions could be generated; request fields are only discoverable by reading LoanForm getters referenced in LoanAction.",
+      "recommendation": "Publish an OpenAPI 3 document for the extracted loan pricing/submission API and generate it from annotations so it cannot drift from the implementation.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "WEB-INF/struts-config.xml",
-        "lines": null
+        "lines": "9-15"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days"
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
       }
     },
     {
@@ -633,298 +109,60 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Structured Error Responses",
-      "description": "No structured error responses. Returns HTML pages with no error codes, no machine-readable error bodies. Exceptions propagate unhandled through Struts to WebLogic default error page.",
-      "gap": "No structured error format, no error codes, no retryable indicators.",
-      "recommendation": "Implement structured JSON error responses with error code, message, and retryable boolean.",
+      "title": "Structured Error Responses",
+      "description": "LoanAction.execute declares 'throws Exception' and saveApplication propagates all JDBC failures unhandled; the only failure path configured is the Struts input attribute input='/loan.jsp', which re-renders an HTML form. There is no error code, error body, or retryable indicator anywhere in the code.",
+      "gap": "Callers cannot distinguish retriable faults (Oracle connection failure, timeout) from terminal faults (bad input), and errors surface as container HTML error pages.",
+      "recommendation": "Return structured error payloads (code, message, retryable) from the new API layer and map JDBC/validation failures onto them explicitly.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "src/com/acme/loan/LoanAction.java",
-        "lines": null
+        "lines": "31-45"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days"
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
       }
     },
     {
-      "question_id": "STATE-Q2",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "No Queryable Current State",
-      "description": "No queryable state endpoints. Application only writes loan applications \u2014 no mechanism to query existing applications or inspect current state.",
-      "gap": "No GET endpoints, no status query APIs, no read-before-write pattern.",
-      "recommendation": "Add query endpoints for application state as part of API modernization.",
-      "severity": "Medium",
-      "priority": "P2",
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "Idempotent Write Operations",
+      "description": "The submit path performs an unconditional INSERT INTO applications in saveApplication with no idempotency key, no natural-key uniqueness check and no read-before-write. A repeated submit (agent retry or duplicate tool call) creates a second loan application row. The action is dispatched purely on the form value 'submit' (lf.getAction()).",
+      "gap": "No idempotency mechanism exists for the only write operation in the system.",
+      "recommendation": "Accept a caller-supplied idempotency key, persist it with a unique constraint on the applications table, and return the original result on replay.",
+      "severity": "High",
+      "priority": "P1",
       "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "WEB-INF/struts-config.xml",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30\u201360 days"
-      }
-    },
-    {
-      "question_id": "HITL-Q3",
-      "category": "Human-in-the-Loop",
-      "category_display": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Sandbox/Staging Environment",
-      "description": "No proper sandbox or staging environment. README mentions 'shared UAT' but no environment separation in code or configuration.",
-      "gap": "No defined staging, no seed data, no environment configuration.",
-      "recommendation": "Create isolated staging environment with production-equivalent schema and synthetic data.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60\u201390 days"
-      }
-    },
-    {
-      "question_id": "DATA-Q4",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No Input Validation \u2014 Active SQL Injection Vulnerability",
-      "description": "No input validation at API boundary. SQL built via string concatenation with unvalidated user input (lf.getApplicantName()). Active SQL injection vulnerability.",
-      "gap": "No input validation, no parameterized queries for all fields, active SQL injection vulnerability.",
-      "recommendation": "Fix SQL injection immediately by using parameterized queries. Add comprehensive input validation.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "48-50"
+        "lines": "47-56"
       },
       "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30\u201360 days"
-      }
-    },
-    {
-      "question_id": "DATA-Q5",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No Temporal Metadata on Records",
-      "description": "No temporal metadata. INSERT statement has no created_at, updated_at, or event_time columns. No timezone handling, no freshness signaling.",
-      "gap": "No timestamps on records, no temporal metadata, no data freshness signaling.",
-      "recommendation": "Add temporal metadata columns (created_at, updated_at) with UTC timezone normalization.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "48-50"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30\u201360 days"
-      }
-    },
-    {
-      "question_id": "DISC-Q1",
-      "category": "Discovery & Documentation",
-      "category_display": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "No Schema Versioning or API Contracts",
-      "description": "No schema versioning, no migration files, no API contracts, no breaking change detection, no changelog.",
-      "gap": "No versioning, no contract documentation, no migration tooling.",
-      "recommendation": "Implement database migrations (Flyway/Liquibase) and API versioning.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60\u201390 days"
-      }
-    },
-    {
-      "question_id": "OBS-Q1",
-      "category": "Observability",
-      "category_display": "Observability",
-      "category_id": "OBS",
-      "title": "No Distributed Tracing or Structured Logging",
-      "description": "No tracing, no structured logging, no correlation IDs. Zero observability instrumentation. Agent-initiated requests are undiagnosable.",
-      "gap": "No tracing, no structured logging, no correlation IDs.",
-      "recommendation": "Add structured JSON logging with correlation IDs and OpenTelemetry tracing.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30\u201360 days"
-      }
-    },
-    {
-      "question_id": "OBS-Q2",
-      "category": "Observability",
-      "category_display": "Observability",
-      "category_id": "OBS",
-      "title": "No Alerting on Error Rates or Latency",
-      "description": "No alerting configuration. No CloudWatch alarms, no anomaly detection, no SLO-based alerting.",
-      "gap": "No alerting thresholds for error rates or latency.",
-      "recommendation": "Implement alerting on error rates and latency for agent-facing APIs.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60\u201390 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q1",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "No Infrastructure as Code",
-      "description": "No IaC. Manual WAR deployment to WebLogic admin console. No Terraform, CloudFormation, CDK, or any IaC files.",
-      "gap": "No IaC, no peer review for infrastructure changes, no drift detection.",
-      "recommendation": "Define infrastructure as code (Terraform/CDK) when migrating to AWS.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "High",
-      "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "90\u2013120 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q2",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "No CI/CD Pipeline",
-      "description": "No CI/CD pipeline. Build system is Apache Ant with no build.xml in repository. No automated testing, no contract testing.",
-      "gap": "No CI/CD, no automated testing, no API contract testing.",
-      "recommendation": "Implement CI/CD pipeline with automated build, test, and API contract validation.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60\u201390 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q3",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "No Rollback Capability",
-      "description": "No rollback capability. Manual WAR upload with no blue/green, no canary, no feature flags, no automated rollback.",
-      "gap": "No automated rollback, no deployment versioning.",
-      "recommendation": "Implement automated deployment with rollback capability (CodeDeploy, ECS, or Kubernetes).",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60\u201390 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q4",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "Zero Automated Test Coverage",
-      "description": "No automated tests. README explicitly states 'No unit tests.' No test files, no test frameworks in repository.",
-      "gap": "Zero test coverage of any kind.",
-      "recommendation": "Implement automated test suite covering loan calculation, input validation, and API contracts.",
-      "severity": "Medium",
-      "priority": "P3",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60\u201390 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q5",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "No Encryption at Rest for Financial Data",
-      "description": "No encryption at rest. Oracle 11g (EOL) stores financial PII with no TDE, no KMS, no encryption configuration.",
-      "gap": "No encryption at rest for sensitive financial data.",
-      "recommendation": "Enable encryption at rest. Use RDS with KMS customer-managed keys when migrating to AWS.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "22"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60\u201390 days"
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled and the single write endpoint has no idempotency control.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "has_write_operations=true (INSERT INTO applications in LoanAction.saveApplication), so agent_scope was inferred as write-enabled and API-Q4 evaluates at its BLOCKER severity.",
+        "blocker_remediation": {
+          "immediate": "Accept a caller-supplied idempotency key, persist it with a unique constraint on the applications table, and return the original result on replay.",
+          "target_state": "Control present and verifiable for every agent-invoked call to the loan pricing/submission surface.",
+          "estimated_effort": "Medium",
+          "dependencies": [
+            "API-Q1",
+            "AUTH-Q1"
+          ]
+        }
       }
     },
     {
@@ -932,17 +170,17 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "HTML-Only Response Format (No JSON/XML)",
-      "description": "All responses are HTML (JSP-rendered pages). No JSON or XML serialization. Agent tools cannot consume HTML responses directly.",
-      "gap": "Responses are human-readable HTML only \u2014 not machine-consumable.",
-      "recommendation": "Build JSON REST API as agent-facing surface.",
+      "title": "Structured Response Format",
+      "description": "Responses are server-rendered HTML: the action returns mapping.findForward('quote') or ('confirm'), resolved by struts-config.xml to /quote.jsp and /confirm.jsp. No JSON or XML serialization code and no content negotiation exist.",
+      "gap": "Agents would have to parse HTML produced by JSP templates, which is brittle and changes with presentation edits.",
+      "recommendation": "Emit JSON from the extracted service layer; keep the JSP views as a separate presentation concern over the same service.",
       "severity": "Low",
       "priority": "P3",
-      "effort": "High",
-      "phase": 1,
+      "effort": "Medium",
+      "phase": 3,
       "evidence": {
         "file": "WEB-INF/struts-config.xml",
-        "lines": "12-14"
+        "lines": "10-16"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -954,17 +192,17 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Event Emission for State Changes",
-      "description": "No event emission. INSERT operation has no associated event publishing (no SNS, EventBridge, SQS, Kafka, or CDC).",
-      "gap": "No event publishing for state changes.",
-      "recommendation": "Add event publishing (SNS or EventBridge) for loan application state changes.",
+      "title": "Event Emission for State Changes",
+      "description": "No event emission of any kind: saveApplication writes to Oracle and returns; there is no JMS, Kafka, SNS/EventBridge, webhook, or outbox table reference in the repository.",
+      "gap": "Agents cannot react to loan application submissions or status transitions without polling the database.",
+      "recommendation": "If event-reactive agents are in scope, add an outbox table written in the same transaction as the application insert, and publish from it.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Medium",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "src/com/acme/loan/LoanAction.java",
-        "lines": null
+        "lines": "47-56"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -976,17 +214,17 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Rate Limit Documentation or Headers",
-      "description": "No rate limit documentation or headers. No X-RateLimit-Remaining, Retry-After, or throttling information returned.",
-      "gap": "No rate limit signals for agents to self-throttle.",
-      "recommendation": "Document and implement rate limit headers when adding API Gateway.",
+      "title": "Rate Limit Documentation and Headers",
+      "description": "The HTTP surface is a WebLogic-hosted Struts action with no throttling: no rate-limiting filter, no gateway in front (deployment is a manual WAR upload per README), and no X-RateLimit/Retry-After headers in the code.",
+      "gap": "Agent callers have no documented limits and no self-throttling signal; they will discover limits only as connection or Oracle session exhaustion.",
+      "recommendation": "Document the supported call rate and return rate-limit headers from the fronting gateway once an API layer exists.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
       "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": null
+        "file": "README.md",
+        "lines": "6-12"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -994,21 +232,662 @@
       }
     },
     {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Machine Identity Authentication",
+      "description": "The application reads request.getRemoteUser() and stores it as the 'officer' column, which implies container-managed (WebLogic) human login, but no authentication configuration exists in the repository: there is no web.xml, no login-config, no security-constraint, no OAuth/mTLS/API-key handling, and no service account definition. The only credential in the repo is a shared Oracle account (DB_USER='loan_app') hardcoded in LoanAction.java.",
+      "gap": "No machine identity mechanism and no principal attribution for non-human callers; an agent could only call the system by impersonating a loan officer's interactive session.",
+      "recommendation": "Front the extracted API with an authenticating gateway issuing per-agent client credentials (OAuth2 client_credentials or mTLS), and carry the agent principal through to the persisted record and logs.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "40-44"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Front the extracted API with an authenticating gateway issuing per-agent client credentials (OAuth2 client_credentials or mTLS), and carry the agent principal through to the persisted record and logs.",
+          "target_state": "Control present and verifiable for every agent-invoked call to the loan pricing/submission surface.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "API-Q1"
+          ]
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Scoped Permissions (Least Privilege)",
+      "description": "There is no authorization model in the repository: no role checks, no permission matrix, no IAM/IaC policies (no .tf/.yaml/CloudFormation present). All database access uses one shared Oracle account 'loan_app' declared in LoanAction.java, so every caller inherits identical, full table privileges.",
+      "gap": "No mechanism to grant a caller read-only or narrowed access \u2014 authorization is entirely coarse-grained.",
+      "recommendation": "Introduce per-caller scopes at the API gateway and distinct database roles (read-only vs insert) so an agent identity can be granted the minimum needed.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "22-24"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Action-Level Authorization",
+      "description": "LoanAction.execute branches on the client-supplied form field lf.getAction(): any caller that reaches the action can trigger the submit (INSERT) path. There is no canRead/canWrite check, no roles attribute on the action mapping in struts-config.xml, and no method-level authorization.",
+      "gap": "Quote (read-like) and submit (write) operations are indistinguishable from an authorization standpoint \u2014 a caller permitted to price a loan is implicitly permitted to create one.",
+      "recommendation": "Split quote and submit into separately authorized operations and enforce the write permission server-side, not via a form field.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "40-44"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Identity Propagation and Delegation",
+      "description": "The only identity handling is request.getRemoteUser() passed as a string into the SQL INSERT. There is no JWT/OAuth parsing, no token exchange, no on-behalf-of flow, and no way to distinguish a caller acting as itself from a caller acting for a loan officer \u2014 the officer field is simply whatever the container reports.",
+      "gap": "An agent acting on behalf of a loan officer cannot be bounded by that officer's permissions, and the audit column cannot separate actor from subject.",
+      "recommendation": "Propagate a verified token to the service layer and persist both the acting principal (agent) and the subject principal (officer) on every application record.",
+      "severity": "High",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "41,47-56"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Credential Management",
+      "description": "Production Oracle credentials are hardcoded as constants in source: DB_URL='jdbc:oracle:thin:@dbprod01:1521:LOANDB', DB_USER='loan_app', DB_PASS='loanApp2010' in LoanAction.java, with a comment noting they are also duplicated in db.properties inside the WAR (README: 'Connection details in a properties file inside the WAR'). No secrets manager, Vault, or rotation mechanism is referenced anywhere.",
+      "gap": "A static, unrotated production database password is committed to version control and duplicated in the deployment artifact \u2014 exactly the kind of secret an agent-facing surface or prompt-injection path can exfiltrate.",
+      "recommendation": "Move the credential to a managed secret store with rotation, obtain connections from a WebLogic/JNDI datasource instead of DriverManager, remove the constants, and rotate the 'loan_app' password since it is already exposed in git history.",
+      "severity": "High",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "21-24"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Immutable Audit Logging",
+      "description": "The only record of a write is the business row itself: the INSERT stores the 'officer' value in the applications table. There is no application log statement in LoanAction.java at all, no logging framework dependency, and no immutable or tamper-evident log store (no CloudTrail/object-lock/retention configuration \u2014 the repo contains no IaC). The audit field is in the same mutable table the application writes to.",
+      "gap": "No immutable, attributable audit trail for loan application creation \u2014 a regulated financial write. Forensics on an agent-initiated submission would be impossible.",
+      "recommendation": "Emit a structured audit event per write (principal, operation, parameters, timestamp, correlation id) to an append-only store with retention, independent of the applications table.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "47-56"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled and no immutable audit trail exists for the write path.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "has_write_operations=true, so agent_scope was inferred as write-enabled; AUTH-Q6 therefore evaluates as BLOCKER rather than RISK-SAFETY. The system also has a write surface, so the dev-library/no-surface INFO calibration does not apply.",
+        "blocker_remediation": {
+          "immediate": "Emit a structured audit event per write (principal, operation, parameters, timestamp, correlation id) to an append-only store with retention, independent of the applications table.",
+          "target_state": "Control present and verifiable for every agent-invoked call to the loan pricing/submission surface.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "API-Q1",
+            "AUTH-Q1"
+          ]
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Agent Identity Suspension",
+      "description": "No identity lifecycle controls exist: no API key store or revocation endpoint, no service account definitions, and the single database identity is a hardcoded shared account. Disabling a misbehaving caller would mean changing the shared 'loan_app' password or undeploying the WAR, which stops all users.",
+      "gap": "No way to suspend one caller without taking down the whole application.",
+      "recommendation": "Issue per-agent credentials at the gateway so an individual identity can be revoked independently of the application deployment.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "22-24"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Compensation and Rollback",
+      "description": "saveApplication opens a connection with DriverManager.getConnection (default autocommit), executes a single string-built INSERT, and closes. There is no transaction boundary, no rollback in a catch/finally block (the connection is not even closed on failure), no compensating 'cancel application' operation, and no saga/undo pattern. The submit path also mutates the form (setMonthlyPayment) before writing.",
+      "gap": "A partially completed or erroneous submission cannot be undone through any supported operation; there is no reversal endpoint and no transactional rollback on failure.",
+      "recommendation": "Wrap the write in an explicit transaction with rollback and close resources in finally (or try-with-resources after a JDK upgrade), and add an explicit cancel/void operation so an agent-initiated submission can be compensated.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "47-56"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled and the write path has neither transactional rollback nor a compensating operation.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "has_write_operations=true and has_http_rpc_surface=true, so the no-write-surface INFO calibration does not apply; archetype is stateful-crud, not stateless-utility, so the archetype downgrade does not apply either.",
+        "blocker_remediation": {
+          "immediate": "Wrap the write in an explicit transaction with rollback and close resources in finally (or try-with-resources after a JDK upgrade), and add an explicit cancel/void operation so an agent-initiated submission can be compensated.",
+          "target_state": "Control present and verifiable for every agent-invoked call to the loan pricing/submission surface.",
+          "estimated_effort": "Medium",
+          "dependencies": [
+            "API-Q1",
+            "AUTH-Q1"
+          ]
+        }
+      }
+    },
+    {
+      "question_id": "STATE-Q2",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Queryable Current State",
+      "description": "The action supports only pricing (forward 'quote') and creation (forward 'confirm'). struts-config.xml declares no read/list mapping and LoanAction contains no SELECT \u2014 there is no way to query an existing application's state, and no status column is written by the INSERT.",
+      "gap": "An agent cannot inspect whether an application already exists or what state it is in before acting, which also makes retry-safety impossible to establish client-side.",
+      "recommendation": "Add a read operation that returns application records and their status, so callers can read before write.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "47-56"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Concurrency Controls",
+      "description": "No concurrency control exists: the INSERT carries no version column, no conditional predicate and no SELECT FOR UPDATE, and no ETag/If-Match handling is present. README explicitly records the known defect 'ActionForms hold mutable shared state; thread-safety bugs under load', and LoanAction's own header comment warns 'Struts 1 Actions are singletons - keep all state local'.",
+      "gap": "Concurrent callers can interleave on shared mutable form state and create duplicate or inconsistent application rows; the documented thread-safety defect is amplified by machine-speed concurrency.",
+      "recommendation": "Add optimistic locking (version column / If-Match) on mutable records and verify the Action holds no instance state before allowing concurrent agent callers.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "README.md",
+        "lines": "21"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "scope_calibration": "agent_scope=write-enabled \u2014 evaluated as RISK-SAFETY.",
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Rate Limiting and Throttling",
+      "description": "No throttling exists at any layer present in the repository: no rate-limiting servlet filter, no gateway or WAF configuration (no IaC at all), and the HTTP surface is the raw Struts action mapped in struts-config.xml. Each submit also opens a brand-new Oracle connection via DriverManager, so unthrottled calls translate directly into database session pressure.",
+      "gap": "A runaway agent loop can exhaust WebLogic threads and Oracle sessions, taking down the loan origination path for human officers.",
+      "recommendation": "Enforce request-rate limits in front of the application (gateway or filter) and use a bounded JNDI connection pool instead of per-request DriverManager connections.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "48-49"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Blast Radius and Transaction Limits",
+      "description": "No business-domain limits exist. There is no per-caller cap on applications submitted, no principal or APR ceiling enforced in code (the header comment references a 2017 'APR cap' change, but execute() applies no cap \u2014 it computes payment from the submitted rate with no bounds), and no bulk-operation or spend threshold.",
+      "gap": "The business impact of an erroneous agent loop is unbounded: it could submit an unlimited number of loan applications at arbitrary principal and rate values.",
+      "recommendation": "Enforce configurable per-caller business limits (applications per hour, maximum principal, allowed APR range) in the service layer, independent of request-rate limiting.",
+      "severity": "High",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "33-38"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "scope_calibration": "agent_scope=write-enabled \u2014 evaluated as RISK-SAFETY.",
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Draft/Pending State",
+      "description": "The submit path commits immediately: saveApplication inserts the application row with columns (applicant, principal, rate, term, officer) and no status column, and the action then forwards to confirm.jsp. There is no draft/pending state, no two-step create-then-confirm API, and no approval status in the schema implied by the INSERT.",
+      "gap": "An agent cannot propose a loan application for human review \u2014 any write it makes is final on first call.",
+      "recommendation": "Add a status column with a PENDING/DRAFT state, have agent-initiated writes land in PENDING, and require an explicit confirm operation to finalize.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "50-53"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "scope_calibration": "agent_scope=write-enabled \u2014 evaluated as RISK-SAFETY.",
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Configurable Approval Gates",
+      "description": "No approval mechanism exists: struts-config.xml exposes a single action with two forwards, there is no approval endpoint, no per-operation configuration flag, and no workflow engine. 'confirm' is a JSP view shown after the write, not a gate before it.",
+      "gap": "High-risk operations (loan submission) cannot be configured to require human approval at the application layer, so the only possible gate is outside the system.",
+      "recommendation": "Introduce per-operation approval configuration so submission by a non-human principal requires an explicit human approval call before the record becomes effective.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "WEB-INF/struts-config.xml",
+        "lines": "10-16"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "scope_calibration": "agent_scope=write-enabled \u2014 evaluated as RISK-SAFETY.",
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Sandbox/Staging Environment",
+      "description": "README documents 'No unit tests; testing is a shared UAT environment' and deployment as 'Manual WAR upload via WebLogic admin console'. The repository contains no environment-specific configuration, no docker-compose, no seed/synthetic data scripts, and no environment IaC. The hardcoded connection string points at a production host (dbprod01) with no environment switch.",
+      "gap": "The only test environment is a shared UAT instance with no isolation, no reproducible data shape and no automated provisioning, and the code's default target is production.",
+      "recommendation": "Provide an isolated, seedable environment with externalized connection configuration so agent behavior can be exercised without touching dbprod01.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": "8-25"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Sensitive Data Classification",
+      "description": "Stage A = Yes: the system persists applicant PII and financial data \u2014 INSERT INTO applications (applicant, principal, rate, term, officer) in LoanAction.saveApplication, backed by Oracle 11g per README. Stage B1: there is no response scoping of any kind \u2014 no DTOs, no @JsonIgnore/write-only serialization, no column projection; the form object LoanForm carries applicant name, principal and computed payment and is handed directly to JSP views. Stage B2: access control is a single shared database account ('loan_app') with no scope differentiation between sensitive and non-sensitive data. Stage B3: no classification metadata \u2014 no field-level sensitivity annotations, no tags (no IaC), no Macie/Presidio tooling.",
+      "gap": "Agent-facing access to applicant PII and loan financials is unscoped and undifferentiated, and the data carries no classification metadata.",
+      "recommendation": "Define response DTOs that expose only the fields an agent needs, split database privileges so PII-bearing columns require a distinct scope, and annotate applicant fields as PII in the schema and code.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "47-56"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: Stage A=Yes (applicant PII + financial records), B1 fired under agent_scope=write-enabled.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "Archetype is stateful-crud (not stateless-utility) and the repo is not a dev-library-application, so no INFO calibration applies. B1 fired (no field scoping on agent-consumable responses) which under write-enabled scope resolves to BLOCKER; B2 also fired (RISK-SAFETY) and B3 is absent (INFO). Highest firing sub-check sets DATA-Q1 = BLOCKER.",
+        "data_q1_subchecks": {
+          "b1": {
+            "fired": true,
+            "severity": "BLOCKER",
+            "reasoning": "No DTOs, serialization exclusions or column projections; LoanForm with applicant name and loan terms is forwarded directly to JSP views (LoanAction.java:31-45)."
+          },
+          "b2": {
+            "fired": true,
+            "severity": "RISK-SAFETY",
+            "reasoning": "Single shared Oracle account 'loan_app' (LoanAction.java:22-24); no scopes, roles or row/column-level security differentiate sensitive access."
+          },
+          "b3": {
+            "fired": true,
+            "severity": "INFO",
+            "reasoning": "No classification tags, field-level sensitivity annotations, or PII detection tooling anywhere in the repository."
+          }
+        },
+        "blocker_remediation": {
+          "immediate": "Define response DTOs that expose only the fields an agent needs, split database privileges so PII-bearing columns require a distinct scope, and annotate applicant fields as PII in the schema and code.",
+          "target_state": "Control present and verifiable for every agent-invoked call to the loan pricing/submission surface.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "API-Q1",
+            "AUTH-Q1"
+          ]
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Data Residency and Sovereignty",
+      "description": "The system stores loan applicant PII and financial terms in Oracle 11g on a Solaris host in a single data center (README Architecture section), yet the repository contains no residency or sovereignty controls or documentation: no GDPR/LGPD/jurisdiction references, no region configuration, no cross-border transfer policy, and no data-handling statement. The connection target is a bare hostname (dbprod01) with no region semantics.",
+      "gap": "Residency constraints on regulated consumer-lending PII are undocumented and unenforced, so there is nothing preventing an agent from forwarding that data to an LLM endpoint in another jurisdiction.",
+      "recommendation": "Document the jurisdiction and applicable regime for the applications dataset, and enforce an allowed-region/processor policy for any agent or LLM integration that reads it.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "README.md",
+        "lines": "4-11"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled and the system holds regulated consumer-lending PII with no documented or enforced residency constraints.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "has_persistent_data_store=true (Oracle via JDBC), so the no-data INFO calibration does not apply, and the archetype is stateful-crud rather than stateless-utility. Under inferred write-enabled scope DATA-Q2 evaluates as BLOCKER.",
+        "blocker_remediation": {
+          "immediate": "Document the jurisdiction and applicable regime for the applications dataset, and enforce an allowed-region/processor policy for any agent or LLM integration that reads it.",
+          "target_state": "Control present and verifiable for every agent-invoked call to the loan pricing/submission surface.",
+          "estimated_effort": "Medium",
+          "dependencies": [
+            "API-Q1",
+            "AUTH-Q1"
+          ]
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Input Validation and Schema Enforcement",
+      "description": "No input validation exists. LoanForm values are consumed directly: getAnnualRate()/getTermMonths()/getPrincipal() feed the amortization formula with no range or null checks (a zero rate or zero term yields division by zero or NaN), and the applicant name is concatenated straight into SQL \u2014 'INSERT INTO applications (applicant, ...) VALUES ('\" + lf.getApplicantName() + \"'' \u2014 then passed to prepareStatement, so the PreparedStatement provides no parameterization and the endpoint is SQL-injectable. No javax.validation annotations, no Struts validation framework (no validation.xml), and no structured field-level error responses are present.",
+      "gap": "Malformed or hostile input is neither rejected nor reported per-field; the only write path is open to SQL injection through the applicant name, and numeric inputs are unbounded.",
+      "recommendation": "Bind parameters with real placeholders (ps.setString/setDouble) instead of string concatenation, add field-level validation with range checks on principal/rate/term, and return structured validation errors identifying the offending field.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "49-54"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Temporal Metadata and Freshness",
+      "description": "The INSERT writes only (applicant, principal, rate, term, officer) \u2014 no created_at, updated_at or event_time column, and no timezone handling or UTC normalization appears anywhere. There are no Cache-Control, freshness or consistency headers because responses are JSP views.",
+      "gap": "Records carry no timestamps, so an agent cannot determine when an application was created or whether the data it reads is current.",
+      "recommendation": "Add created_at/updated_at columns stored in UTC and expose them on read responses along with a freshness or consistency indicator.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "50-53"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "PII Redaction in Logs",
+      "description": "There is no logging framework and no log statement in the codebase (no log4j/commons-logging/SLF4J usage in LoanAction.java, no logging configuration file), and consequently no scrubbing or masking layer. Failures instead propagate: execute() and saveApplication() both declare 'throws Exception', so JDBC exceptions escape to the WebLogic container. Because the SQL is built by string concatenation, the exception message carries the fully interpolated statement including the applicant name, which lands unredacted in container logs. .gitignore excludes *.log, so no sample log is available to inspect.",
+      "gap": "No redaction control exists on the one path that does emit user data \u2014 stack traces and SQL text containing applicant PII reach container logs in the clear.",
+      "recommendation": "Introduce structured logging with an explicit PII masking/allowlist policy, catch JDBC exceptions and log a sanitized message without the SQL text or applicant values.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "29-30,47-56"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
       "question_id": "DATA-Q7",
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No Data Quality Metrics or Monitoring",
-      "description": "No data quality metrics, completeness scores, or freshness SLAs. No profiling, no null rate monitoring, no duplicate detection.",
-      "gap": "No data quality visibility for agents.",
-      "recommendation": "Implement data quality monitoring when establishing observability.",
+      "title": "Data Quality Awareness",
+      "description": "A persistent store exists (Oracle 11g applications table) but there is no data quality instrumentation: no profiling report, no null-rate or duplicate monitoring, no freshness SLA, and no quality metrics. Duplicate submissions are structurally possible (see API-Q4), so duplicate rate is both unmeasured and likely non-zero.",
+      "gap": "Agents reasoning over the applications dataset have no completeness or duplication signal to weigh.",
+      "recommendation": "Baseline null rates and duplicate rates on the applications table and publish a minimal data quality metric before exposing it to agents.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "README.md",
+        "lines": "8"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Schema Versioning and API Contracts",
+      "description": "No versioning or contract artifacts exist: the action path is '/loan' with no /v1/ segment or Accept-Version handling, there are no migration files, no JSON Schema/Avro/Protobuf definitions, no schema registry reference, no changelog, and no CI (so no breaking-change detection or contract tests). README notes dependency jars are committed with 'no version manifest', so even library versions are unversioned.",
+      "gap": "Any change to the form fields or the applications table is invisible to callers and would silently break agent tool bindings.",
+      "recommendation": "Version the extracted API path, manage the database schema with checked-in migrations, and add breaking-change detection (OpenAPI diff or consumer contract tests) to a pipeline.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "WEB-INF/struts-config.xml",
+        "lines": "9-15"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Semantically Meaningful Field Names",
+      "description": "Naming is largely self-describing and free of legacy codes: Java properties are principal, annualRate, termMonths, monthlyPayment, applicantName, and the SQL columns are applicant, principal, rate, term, officer. Minor ambiguity exists where names drop units or qualifiers \u2014 'rate' in the table versus annualRate in the form, and 'term' versus termMonths \u2014 and no data dictionary exists to resolve it.",
+      "gap": "No data dictionary documents units (monthly vs annual rate, months vs years) for the persisted columns, leaving room for an agent to misinterpret 'rate' and 'term'.",
+      "recommendation": "Rename or document the persisted columns to carry units (annual_rate_pct, term_months) so the semantics are unambiguous without a lookup.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
       "evidence": {
-        "file": "README.md",
-        "lines": null
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "50-53"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -1020,21 +899,210 @@
       "category": "Discovery & Documentation",
       "category_display": "Discovery & Documentation",
       "category_id": "DISC",
-      "title": "No Data Catalog or Metadata Layer",
-      "description": "No data catalog or metadata layer. No Glue Data Catalog, no schema documentation beyond the INSERT statement in source code.",
-      "gap": "No metadata describing what data the system holds.",
-      "recommendation": "Create data dictionary documenting the applications table schema and field semantics.",
+      "title": "Data Catalog / Metadata Layer",
+      "description": "No catalog or metadata layer exists: no Glue/DataHub/Collibra reference, no data dictionary file, no schema documentation. The applications table structure can only be inferred from the INSERT statement in LoanAction.saveApplication; README describes the runtime stack but documents no data model.",
+      "gap": "Teams building agent tools must reverse-engineer the data model from source, slowing tool definition and increasing misinterpretation risk.",
+      "recommendation": "Publish a minimal data dictionary for the applications table (columns, units, sensitivity) as the first catalog entry for this system.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
       "evidence": {
         "file": "README.md",
-        "lines": null
+        "lines": "4-11"
       },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_display": "Observability",
+      "category_id": "OBS",
+      "title": "Distributed Tracing and Structured Logging",
+      "description": "Neither tracing nor structured logging is present: no OpenTelemetry/X-Ray instrumentation, no traceparent or correlation-id propagation, and no log statements at all in LoanAction.java. There is no logging configuration file and no logging dependency (the project has no dependency manifest \u2014 jars are committed per README).",
+      "gap": "A failed agent-initiated submission leaves no correlated trace or log record, so it cannot be reconstructed or attributed.",
+      "recommendation": "Add structured JSON logging with a correlation id accepted from the caller and propagated into the data access path, then instrument with OpenTelemetry.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "26-45"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_display": "Observability",
+      "category_id": "OBS",
+      "title": "Alerting on Error Rates and Latency",
+      "description": "No alerting configuration exists anywhere in the repository: no CloudWatch alarms or IaC, no PagerDuty/OpsGenie integration, no SLO definitions, no health-check endpoint (struts-config.xml declares only the /loan action). Deployment is manual via the WebLogic console per README, so there is no pipeline-managed monitoring either.",
+      "gap": "Degradation of the loan path would be detected only by user reports, after agent callers have already begun failing or retrying.",
+      "recommendation": "Define error-rate and latency SLOs for the loan endpoint and configure alerting on them, starting with WebLogic/Oracle metrics already available.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "WEB-INF/struts-config.xml",
+        "lines": "8-17"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "Infrastructure Governance for Agent-Facing Surface",
+      "description": "There is no infrastructure as code: no Terraform, CloudFormation, CDK, Helm, Kubernetes or Ansible artifacts exist (the repository contains only README.md, .gitignore, struts-config.xml and one Java source file). README states deployment is 'Manual WAR upload via WebLogic admin console' on a Solaris host, so the integration surface, credentials and networking are configured by hand with no plan review and no drift detection.",
+      "gap": "All three sub-checks fail: the surface is not defined as code, changes are not reviewable, and drift is undetectable.",
+      "recommendation": "Codify the deployment target, datasource and network/auth configuration as IaC under peer review, with drift detection, before exposing the system to agents.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": "6-12"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "CI/CD with API Contract Testing",
+      "description": "No pipeline exists: no .github/workflows, no .gitlab-ci.yml, Jenkinsfile, or buildspec.yml. The build is Apache Ant with jars committed to /lib (README), and release is a manual console upload. With no pipeline there is also no contract test, no spec validation and no breaking-change gate.",
+      "gap": "API-breaking changes reach the shared environment with no automated detection, so agent tool bindings can break without warning.",
+      "recommendation": "Stand up a build pipeline that compiles, runs tests, and validates the published API contract against the previous version on every change.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": "8-12"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "Rollback Capability",
+      "description": "Rollback is manual and unbounded: deployment is a WAR uploaded by hand through the WebLogic admin console (README), with no blue/green or canary configuration, no feature flags, no traffic shifting, and no retained previous artifact referenced in the repository. The last Solaris host in the data center is the single deployment target.",
+      "gap": "Recovering from a change that breaks the agent-facing surface depends on a human locating and re-uploading a prior WAR, with no tested path or time guarantee.",
+      "recommendation": "Keep versioned, immutable build artifacts and automate redeploy of the previous version; longer term adopt blue/green or traffic shifting on a supported runtime.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": "9-12"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "API Test Coverage",
+      "description": "There are no tests of any kind: no test directory, no JUnit/REST Assured/Postman artifacts, and README states plainly 'No unit tests; testing is a shared UAT environment'. The amortization formula in execute() and the write path in saveApplication are therefore entirely unverified.",
+      "gap": "No automated coverage of input handling, output values, or error behavior for the operations an agent would call.",
+      "recommendation": "Add unit tests for the amortization calculation and boundary inputs, plus endpoint-level tests for the submit path, and run them in CI.",
+      "severity": "Medium",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "README.md",
+        "lines": "19"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "Encryption at Rest for Agent-Accessible Data",
+      "description": "No encryption-at-rest evidence exists for the Oracle 11g store holding applicant PII: there is no IaC, no KMS or TDE reference, no tablespace encryption configuration, and the JDBC URL 'jdbc:oracle:thin:@dbprod01:1521:LOANDB' specifies no TLS or wallet settings (so the connection is unencrypted in transit as well).",
+      "gap": "Encryption at rest for the applications table is unverified and uncontrolled from this repository, as is transport encryption to the database.",
+      "recommendation": "Confirm and document Oracle TDE (or equivalent) for the LOANDB tablespaces and enable TLS on the JDBC connection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/loan/LoanAction.java",
+        "lines": "22"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Keep the agent out of the submit path (quote-only) until this control exists.",
+          "Require human review of every agent-produced loan application before it is acted on."
+        ]
       }
     }
   ],
@@ -1044,35 +1112,35 @@
       "category_id": "API",
       "title": "Asynchronous Operation Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no evidence of operations >30s or long-running workflows in this simple loan calculator."
+      "reason": "Extended question not triggered \u2014 no long-running operations. LoanAction.execute performs an in-memory amortization calculation and a single INSERT; no operation approaches 30s and no job/async framework is present."
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category_id": "STATE",
+      "title": "Circuit Breakers and Resilience",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered \u2014 no external service dependencies. The only downstream call is the Oracle JDBC connection in saveApplication; no HTTP/service clients exist."
     },
     {
       "question_id": "STATE-Q7",
       "category_id": "STATE",
       "title": "Graceful Degradation Signaling",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 service is not P0 priority and not on critical path."
+      "reason": "Extended question not triggered \u2014 no priority declared (no additionalPlanContext priority) and no evidence this service is on a declared critical path."
     },
     {
       "question_id": "DATA-Q3",
       "category_id": "DATA",
       "title": "Selective Query Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no list/query endpoints with potentially unbounded results exist."
-    },
-    {
-      "question_id": "DISC-Q2",
-      "category_id": "DISC",
-      "title": "Semantically Meaningful Field Names",
-      "status": "pass",
-      "reason": "Field names (applicant, principal, rate, term, officer) are semantically meaningful and human-readable. No legacy codes requiring a data dictionary."
+      "reason": "Extended question not triggered \u2014 no list/query endpoints exist. struts-config.xml declares only the /loan action and LoanAction contains no SELECT, so there are no unbounded result sets."
     },
     {
       "question_id": "OBS-Q3",
       "category_id": "OBS",
       "title": "Business Outcome Metrics",
       "status": "pass",
-      "reason": "No metrics or telemetry of any kind \u2014 informational signal, no finding emitted."
+      "reason": "No metrics or telemetry surface of any kind exists (no metric publication, no dashboards, no instrumentation dependency) \u2014 informational absence suppressed per the scoring model; no finding emitted."
     }
   ],
   "remediation_roadmap": {
@@ -1091,33 +1159,38 @@
           "AUTH-Q1",
           "AUTH-Q6",
           "STATE-Q1",
-          "DATA-Q2",
+          "DATA-Q1",
+          "DATA-Q2"
+        ],
+        "summary": "Create a machine-callable API with machine identity, idempotent and reversible writes, immutable audit, and scoped/classified data access. No agent deployment \u2014 including pilots \u2014 until these are closed."
+      },
+      {
+        "phase": 1,
+        "phase_name": "Safety",
+        "findings": [
           "AUTH-Q2",
           "AUTH-Q3",
+          "AUTH-Q4",
           "AUTH-Q5",
           "AUTH-Q7",
           "STATE-Q3",
-          "STATE-Q4",
           "STATE-Q5",
+          "STATE-Q6",
           "HITL-Q1",
           "HITL-Q2",
-          "DATA-Q1",
-          "DATA-Q6",
-          "DATA-Q4",
-          "API-Q5"
+          "DATA-Q6"
         ],
-        "summary": "Resolve all 6 BLOCKERs and critical RISK-SAFETY findings. Establish programmatic API, machine identity, audit logging, compensation, data residency controls, and foundational safety controls."
+        "summary": "Close agent-safety gaps: credential management, authorization scoping, concurrency, rate and blast-radius limits, human-in-the-loop states, and PII handling in logs."
       },
       {
         "phase": 2,
-        "phase_name": "Safety",
+        "phase_name": "Quality",
         "findings": [
-          "AUTH-Q4",
-          "STATE-Q6",
           "API-Q2",
           "API-Q3",
           "STATE-Q2",
           "HITL-Q3",
+          "DATA-Q4",
           "DATA-Q5",
           "DISC-Q1",
           "OBS-Q1",
@@ -1125,113 +1198,88 @@
           "ENG-Q1",
           "ENG-Q2",
           "ENG-Q3",
+          "ENG-Q4",
           "ENG-Q5"
         ],
-        "summary": "Address remaining RISK-SAFETY items and RISK-QUALITY engineering maturity gaps. Establish observability, CI/CD, IaC, and schema management."
-      },
-      {
-        "phase": 3,
-        "phase_name": "Quality",
-        "findings": [
-          "ENG-Q4",
-          "API-Q7",
-          "API-Q8",
-          "DATA-Q7",
-          "DISC-Q3"
-        ],
-        "summary": "Implement quality improvements: test coverage, event emission, rate limit headers, data quality monitoring, and data catalog."
+        "summary": "Raise integration quality and engineering maturity: API spec and structured errors, input validation, timestamps, versioning, observability, IaC, CI/CD, rollback, tests, encryption."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Modernize to REST API with JSON endpoints",
+      "action": "Expose a documented JSON API in front of the Struts action",
       "question_ids": [
         "API-Q1",
         "API-Q2",
         "API-Q3",
-        "API-Q4",
-        "API-Q5"
+        "API-Q5",
+        "DISC-Q1"
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "The fundamental blocker: no programmatic API exists. All other improvements (auth, idempotency, structured errors) depend on having a REST API surface."
+      "rationale": "Agents cannot bind to JSP screens; every other control needs an API boundary to attach to."
     },
     {
-      "action": "Implement machine identity and access control",
+      "action": "Introduce machine identity and scoped authorization at a gateway",
       "question_ids": [
         "AUTH-Q1",
         "AUTH-Q2",
         "AUTH-Q3",
+        "AUTH-Q4",
         "AUTH-Q7"
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "Without machine identity, no agent can be authenticated, authorized, or suspended. Foundation for all security controls."
+      "rationale": "Identity must precede data access controls \u2014 attribution is currently limited to a container-provided username and a shared database account."
     },
     {
-      "action": "Deploy centralized identity provider with audit logging",
+      "action": "Remove hardcoded production Oracle credentials and rotate them",
       "question_ids": [
-        "AUTH-Q6",
-        "AUTH-Q4",
-        "AUTH-Q5"
-      ],
-      "priority": "P0",
-      "effort": "Medium",
-      "rationale": "Audit logging requires identity. Identity propagation and credential management complete the auth story."
-    },
-    {
-      "action": "Implement state management safety controls",
-      "question_ids": [
-        "STATE-Q1",
-        "STATE-Q3",
-        "STATE-Q4",
-        "STATE-Q5",
-        "STATE-Q6"
-      ],
-      "priority": "P0",
-      "effort": "Medium",
-      "rationale": "Write safety: compensation, concurrency controls, rate limiting, and blast radius limits prevent agent-caused data corruption."
-    },
-    {
-      "action": "Establish data governance and residency controls",
-      "question_ids": [
-        "DATA-Q1",
-        "DATA-Q2",
-        "DATA-Q6",
-        "DATA-Q4"
-      ],
-      "priority": "P0",
-      "effort": "Medium",
-      "rationale": "Financial PII requires residency controls, access differentiation, PII redaction, and input validation to prevent regulatory violations."
-    },
-    {
-      "action": "Add human-in-the-loop approval workflows",
-      "question_ids": [
-        "HITL-Q1",
-        "HITL-Q2",
-        "HITL-Q3"
+        "AUTH-Q5",
+        "ENG-Q5"
       ],
       "priority": "P1",
       "effort": "Medium",
-      "rationale": "Write-enabled agents submitting loan applications need draft states and approval gates for high-risk operations."
+      "rationale": "DB_PASS is committed in LoanAction.java and duplicated in the WAR; it is already exposed in git history."
     },
     {
-      "action": "Implement observability and engineering maturity",
+      "action": "Make the write path safe: parameterized SQL, transaction with rollback, idempotency key, pending state",
       "question_ids": [
-        "OBS-Q1",
-        "OBS-Q2",
+        "API-Q4",
+        "STATE-Q1",
+        "DATA-Q4",
+        "HITL-Q1",
+        "HITL-Q2",
+        "STATE-Q3"
+      ],
+      "priority": "P0",
+      "effort": "Medium",
+      "rationale": "The single write is SQL-injectable, non-idempotent, non-transactional and immediately final."
+    },
+    {
+      "action": "Add audit, logging and data protection for applicant PII",
+      "question_ids": [
+        "AUTH-Q6",
+        "DATA-Q1",
+        "DATA-Q2",
+        "DATA-Q6"
+      ],
+      "priority": "P1",
+      "effort": "High",
+      "rationale": "Regulated consumer-lending data is stored with no audit trail, no response scoping, no residency position and no log redaction."
+    },
+    {
+      "action": "Establish IaC, CI/CD, tests and rollback for the deployment",
+      "question_ids": [
         "ENG-Q1",
         "ENG-Q2",
         "ENG-Q3",
         "ENG-Q4",
-        "ENG-Q5"
+        "HITL-Q3"
       ],
       "priority": "P2",
       "effort": "High",
-      "rationale": "Operational foundation: tracing, alerting, IaC, CI/CD, rollback, testing, and encryption support safe ongoing operation."
+      "rationale": "Manual WAR upload with no tests and a shared UAT environment makes any agent-facing change unverifiable and unrecoverable."
     }
-  ],
-  "analysis_type": "ara",
-  "repo_name": "legacy-loan-calculator"
+  ]
 }

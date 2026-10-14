@@ -1,47 +1,52 @@
 {
-  "analysis_type": "ara",
   "repo_name": "legacy-pricing-cgi",
+  "analysis_type": "ara",
   "metadata": {
-    "analysis_date": "2025-07-18",
-    "analyzed_by": "AWS Transform Custom — Agentic Readiness Analysis",
+    "analysis_type": "ara",
+    "analysis_date": "2026-10-13",
+    "td_version": "agentic-readiness-analysis",
     "portfolio_name": "legacy-pricing-cgi",
+    "language": "C++",
+    "loc": 72,
     "repo_type": "application",
     "repo_type_source": "auto-detected",
+    "repo_type_justification": "Application source with a deployable entry point (main() in pricing.cpp), a Dockerfile, and single-service Kubernetes manifests under k8s/. No sibling service units and no publish-only packaging, so neither monorepo nor library applies.",
     "service_archetype": "stateless-utility",
     "service_archetype_source": "auto-detected",
+    "archetype_justification": "No database, cache, or queue client exists. The single CGI entry point serves read-only GET lookups against a pipe-delimited reference file (/etc/pricing/rules.dat) and returns a computed price; there are no write paths and no user-specific state.",
     "agent_scope": "read-only",
     "agent_scope_source": "inferred",
-    "tech_stack": {
-      "language": "C++",
-      "loc": 62,
-      "framework": "Apache CGI (mod_cgi)",
-      "architecture": "Monolithic CGI binary"
-    },
     "surface_flags": {
       "has_persistent_data_store": false,
       "has_http_rpc_surface": true,
       "has_auth_surface": false,
       "has_write_operations": false,
       "has_logging_of_user_data": false
+    },
+    "tech_stack": {
+      "language": "C++ (pre-C++11)",
+      "loc": 72,
+      "framework": "Apache httpd 2.4 CGI (mod_cgid), hand-written Makefile / g++",
+      "architecture": "Single compiled CGI binary behind Apache, deployed as a 2-replica Kubernetes Deployment with a ClusterIP Service; pricing rules read from a flat pipe-delimited file on each request"
     }
   },
   "classification": {
     "tier": "Remediation Required",
     "sub_qualifier": null,
     "blocker_count": 2,
-    "risk_safety_count": 4,
+    "risk_safety_count": 3,
     "risk_quality_count": 10,
-    "info_count": 11,
-    "high_count": 2,
-    "medium_count": 14,
-    "low_count": 11,
+    "info_count": 13,
+    "high_count": 5,
+    "medium_count": 10,
+    "low_count": 13,
     "rule_matched": "1-2 BLOCKER → Remediation Required"
   },
   "counts": {
-    "total": 27,
-    "high": 2,
-    "medium": 14,
-    "low": 11
+    "total": 28,
+    "high": 5,
+    "medium": 10,
+    "low": 13
   },
   "findings": [
     {
@@ -49,23 +54,26 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No structured API interface — CGI returns HTML only",
-      "description": "The application exposes an HTTP CGI endpoint (/cgi-bin/pricing.cgi?sku=X&qty=Y) returning unstructured HTML. Agent integration requires HTML parsing — effectively UI automation.",
-      "gap": "No REST API, no structured responses. Agent integration requires scraping.",
-      "recommendation": "Add a JSON response mode (Accept: application/json or format=json query parameter) returning structured JSON.",
+      "title": "No documented machine-consumable API interface",
+      "description": "The only integration surface is a single Apache CGI endpoint, /cgi-bin/pricing.cgi?sku=<sku>&qty=<n>, implemented in pricing.cpp. main() reads the QUERY_STRING environment variable and emits an HTML document with printf (Content-Type: text/html). There are no REST resources, no GraphQL schema, no AsyncAPI definition, and no JSON representation. Consuming this service from an agent tool requires scraping <p>Unit: $...</p> out of an HTML page. No OpenAPI/Swagger, GraphQL, Smithy, or AsyncAPI file exists anywhere in the repository (searched for openapi.*, swagger.*, *.graphql, *.gql, *.smithy, and framework route declarations; the repository contains only pricing.cpp, Makefile, Dockerfile, k8s/*.yaml, and markdown).",
+      "gap": "No documented, structured API contract. Integration is HTML-screen-scraping against a presentation-formatted response, which is the brittle coupling API-Q1 is designed to detect.",
+      "recommendation": "Front the pricing calculation with a documented JSON interface: add a thin HTTP service (or an API Gateway + Lambda/sidecar wrapper) exposing GET /v1/prices?sku=&qty= returning {\"sku\",\"quantity\",\"unit_price\",\"total_price\",\"currency\",\"as_of\"}, and publish an OpenAPI description of it. Keep the CGI path only for legacy callers.",
       "severity": "High",
       "priority": "P0",
-      "effort": "Low",
+      "effort": "High",
       "phase": 1,
-      "evidence": {"file": "pricing.cpp", "lines": "52-62"},
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "48-72"
+      },
       "ara_metadata": {
         "native_severity": "BLOCKER",
-        "safety_impact": true,
+        "safety_impact": false,
         "blocker_remediation": {
-          "immediate": "Add JSON response mode with format=json query parameter",
-          "target_state": "Documented REST endpoint returning structured JSON with proper HTTP status codes",
-          "estimated_effort": "Low",
-          "dependencies": []
+          "immediate": "Define the pricing contract as an OpenAPI 3 document (sku, qty inputs; unit_price, total_price, currency outputs) and implement a JSON endpoint in front of the existing calculation.",
+          "target_state": "Agents bind to a versioned JSON API described by a committed, CI-validated OpenAPI spec; no HTML parsing is required for integration.",
+          "estimated_effort": "High",
+          "dependencies": ["API-Q2", "API-Q3", "DISC-Q1"]
         }
       }
     },
@@ -74,23 +82,26 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No machine identity authentication — endpoint completely open",
-      "description": "The CGI endpoint has no authentication mechanism. No API keys, no OAuth, no mTLS. Any network-reachable client can call the endpoint without identification.",
-      "gap": "No machine identity authentication. Cannot attribute requests to a specific agent principal.",
-      "recommendation": "Deploy API Gateway with API key or OAuth2 client credentials authentication with principal attribution in audit logs.",
+      "title": "No machine identity authentication on the CGI surface",
+      "description": "The service performs no authentication of any kind. pricing.cpp reads QUERY_STRING and responds unconditionally; there is no token parsing, API key check, or principal lookup. The Dockerfile configures Apache with 'Require all granted' on /usr/local/apache2/cgi-bin, so every request to port 8080 is served anonymously. k8s/service.yaml is a ClusterIP Service with no authorizer, and the commented ALB Ingress example in the same file adds no authentication annotations. No OAuth2 client-credentials flow, mTLS configuration, service account, Cognito app client, or API Gateway authorizer exists (searched all of pricing.cpp, Dockerfile, and k8s/*.yaml; no IaC or identity provider configuration is present in the repository).",
+      "gap": "There is no mechanism to identify a calling principal, so no agent call can be attributed, scoped, rate-limited per identity, or revoked. Every downstream authorization and audit control is unimplementable without this.",
+      "recommendation": "Terminate agent traffic at an authenticating layer before the CGI binary: an ALB/API Gateway with an OIDC or IAM authorizer, or a mesh sidecar enforcing mTLS, passing a verified principal identifier to the backend. Issue a distinct machine identity per agent so calls are attributable.",
       "severity": "High",
       "priority": "P0",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {"file": "pricing.cpp", "lines": null},
+      "evidence": {
+        "file": "Dockerfile",
+        "lines": "27-38"
+      },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
         "blocker_remediation": {
-          "immediate": "Deploy API Gateway or ingress controller with API key authentication",
-          "target_state": "API Gateway with OAuth2 client credentials flow and per-caller attribution in audit logs",
+          "immediate": "Place the Service behind an authenticating ingress (ALB with OIDC/IAM auth or API Gateway with an authorizer) and reject unauthenticated requests at the edge.",
+          "target_state": "Each agent calls with its own machine credential (OAuth2 client credentials, mTLS cert, or SigV4), and the verified principal is recorded on every request.",
           "estimated_effort": "Medium",
-          "dependencies": []
+          "dependencies": ["AUTH-Q2", "AUTH-Q3", "STATE-Q5"]
         }
       }
     },
@@ -99,20 +110,26 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No scoped permissions — all callers have identical access",
-      "description": "No authorization model exists. The endpoint is completely open — all callers have identical unrestricted access.",
-      "gap": "No RBAC, no IAM policies, no API key scoping. Cannot differentiate access levels.",
-      "recommendation": "Introduce API Gateway with usage plans that scope per-caller access.",
-      "severity": "Medium",
+      "title": "No authorization model, therefore no scoped permissions",
+      "description": "No authorization model exists at any layer. pricing.cpp contains no permission check between parsing the query string and returning a price. The Apache configuration generated in the Dockerfile grants 'Require all granted' to the cgi-bin directory. There are no IAM policies, API Gateway resource policies, or RBAC definitions in the repository — k8s/ contains only namespace, configmap, deployment, and service manifests with no Role, RoleBinding, or NetworkPolicy. Because all callers receive identical access, there is no mechanism to grant one agent identity narrower access than another.",
+      "gap": "No capability to differentiate access levels per caller. An agent identity cannot be constrained to a subset of SKUs, endpoints, or operations; it inherits the full surface by default.",
+      "recommendation": "Introduce a scoped authorization layer at the ingress — e.g., API Gateway with per-client usage identity plus scope claims, or an IAM policy per agent role restricted to the pricing route — so each agent credential carries only the access its task requires.",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {"file": "pricing.cpp", "lines": null},
+      "evidence": {
+        "file": "Dockerfile",
+        "lines": "31-36"
+      },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "compensating_controls": ["Deploy API Gateway with usage plans and API keys to scope access per consumer", "Use Kubernetes NetworkPolicy to restrict which pods can reach the service"],
-        "remediation_timeline": "30–60 days"
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Keep the Service ClusterIP-only and expose it to the agent exclusively through a gateway that enforces per-client scopes, so the unscoped backend is never directly reachable.",
+          "Restrict the pricing namespace with a NetworkPolicy allowing ingress only from the gateway, bounding which workloads can call the unauthorized surface."
+        ]
       }
     },
     {
@@ -120,44 +137,26 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No action-level authorization framework",
-      "description": "No action-level authorization exists. No ABAC, no RBAC, no permission checks of any kind.",
-      "gap": "No framework to enforce fine-grained permissions.",
-      "recommendation": "Implement alongside AUTH-Q2 — API Gateway resource policies can enforce action-level controls.",
-      "severity": "Medium",
+      "title": "No action-level authorization enforcement point",
+      "description": "The binary exposes a single implicit read action and enforces nothing. There are no canRead/canWrite/canDelete style checks, no ABAC or RBAC permission matrix, and no method-level authorization configuration. Apache's generated configuration (Dockerfile) sets Options +ExecCGI with 'Require all granted' and does not constrain HTTP methods, so the CGI binary is invoked for any method reaching the path; pricing.cpp ignores REQUEST_METHOD entirely and always executes the same code path.",
+      "gap": "No mechanism exists to permit some operations and deny others per caller. If the service later gains write or administrative paths, there is no enforcement point to attach action-level rules to, and today no method restriction exists at all.",
+      "recommendation": "Add an authorization enforcement point at the ingress or in a wrapper service that is keyed on operation (and, at minimum, restrict the CGI route to GET via Apache <LimitExcept> or gateway method configuration).",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {"file": "pricing.cpp", "lines": null},
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "48-72"
+      },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "compensating_controls": ["Application is currently read-only, limiting blast radius", "API Gateway method-level authorization can be added at infrastructure layer"],
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "AUTH-Q6",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No audit logging — requests are unattributable",
-      "description": "No audit logging exists. The CGI binary writes no logs. No immutable log storage, no principal attribution, no log retention configuration.",
-      "gap": "No CloudTrail, no structured access logs, no immutable log storage.",
-      "recommendation": "Configure Apache access log forwarding to CloudWatch Logs with retention policy. Route logs to S3 with Object Lock.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {"file": "pricing.cpp", "lines": null},
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, audit logging important but not deployment blocker",
-        "agent_scope": "read-only",
-        "resolution_reasoning": "Read-only agents do not execute write operations, so audit logging is RISK-SAFETY rather than BLOCKER.",
-        "compensating_controls": ["Enable Apache access logging with request details, forward to CloudWatch Logs", "Deploy API Gateway with CloudWatch logging enabled"],
-        "remediation_timeline": "30–60 days"
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Limit the exposed route to GET only at the gateway/Apache level so no unintended method reaches the binary.",
+          "Expose only the read path to the agent tool definition and keep any future mutating endpoint on a separate, separately-authorized host."
+        ]
       }
     },
     {
@@ -165,20 +164,26 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No rate limiting at any layer",
-      "description": "No rate limiting exists. The CGI endpoint accepts unlimited requests. No API Gateway throttling, no WAF rules, no application-level rate limiting.",
-      "gap": "No rate limiting at the API layer. A runaway agent loop could overwhelm the service.",
-      "recommendation": "Deploy API Gateway or Ingress controller with rate limiting.",
-      "severity": "Medium",
+      "title": "No rate limiting or throttling on the agent-callable endpoint",
+      "description": "No rate limiting exists at any layer. pricing.cpp has no request accounting. The Apache configuration assembled in the Dockerfile enables cgid/cgi modules and the cgi-bin ScriptAlias but sets no mod_ratelimit, mod_qos, or MaxRequestWorkers tuning. k8s/service.yaml is a plain ClusterIP Service and the Ingress example in its comments carries only ALB scheme/target-type annotations — no WAF rate rule, no API Gateway usage plan (no IaC of any kind exists in the repository). The only bound is the per-pod CPU limit of 500m across 2 replicas in k8s/deployment.yaml, which is a saturation point, not a throttle. Because every request forks a CGI process and re-opens and re-scans /etc/pricing/rules.dat (lookup_price, pricing.cpp), machine-speed calling is unusually expensive per request.",
+      "gap": "A runaway agent loop can saturate the deployment at machine speed with no per-caller ceiling and no 429 response; failure mode is pod CPU exhaustion and probe failure rather than graceful rejection.",
+      "recommendation": "Enforce request-rate limits in front of the service — AWS WAF rate-based rules or an API Gateway usage plan on the agent-facing route — and return 429 with Retry-After so callers can self-throttle.",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {"file": "k8s/deployment.yaml", "lines": null},
+      "evidence": {
+        "file": "k8s/service.yaml",
+        "lines": "1-45"
+      },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "compensating_controls": ["Kubernetes resource limits (CPU: 500m, memory: 128Mi) provide basic DoS protection", "Add Ingress controller with rate-limiting annotations"],
-        "remediation_timeline": "30–60 days"
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Apply a WAF rate-based rule or gateway usage plan on the agent route before granting the agent access.",
+          "Cap agent-side concurrency and add client-side backoff in the agent tool wrapper, and alert on pod CPU saturation as a proxy signal until server-side limits exist."
+        ]
       }
     },
     {
@@ -187,18 +192,25 @@
       "category_display": "API & Tooling",
       "category_id": "API",
       "title": "No machine-readable API specification",
-      "description": "No OpenAPI, AsyncAPI, GraphQL schema, or Smithy model exists. Agent tool generation requires manual work.",
-      "gap": "No machine-readable spec to auto-generate agent tool definitions.",
-      "recommendation": "Create an OpenAPI 3.0 specification documenting the pricing endpoint.",
+      "description": "No OpenAPI, Swagger, AsyncAPI, GraphQL, or Smithy artifact exists. The repository's ten files are .gitignore, CONTAINERIZE.md, Dockerfile, Makefile, README.md, pricing.cpp, and four k8s manifests; searches for openapi.*, swagger.*, *.graphql, *.gql, and *.smithy returned nothing, and there is no dependency manifest that could pull in a spec-generation framework. The closest thing to a contract is the prose health-check URL in CONTAINERIZE.md and the probe paths in k8s/deployment.yaml.",
+      "gap": "Agent tool definitions must be hand-authored from source reading and will drift from the binary's actual behaviour, which is undocumented beyond two query parameters.",
+      "recommendation": "Author an OpenAPI 3 document for the pricing operation (including the HEALTH sentinel SKU behaviour), commit it next to the source, and validate it in CI against the served responses.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
-      "evidence": {"file": "README.md", "lines": null},
+      "evidence": {
+        "file": "CONTAINERIZE.md",
+        "lines": "5-14"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30–60 days"
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Hand-author and version-control the agent tool schema from pricing.cpp, and pin the tool definition to a reviewed source revision.",
+          "Add a contract smoke test that asserts the documented parameter names and output fields still hold."
+        ]
       }
     },
     {
@@ -206,19 +218,26 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No structured error responses — all requests return HTTP 200",
-      "description": "Always returns HTTP 200 with HTML. No error codes, no structured error bodies. If SKU is not found, returns $0.00 — indistinguishable from a free item.",
-      "gap": "Agents cannot distinguish error conditions from success.",
-      "recommendation": "Implement structured JSON errors with appropriate HTTP status codes.",
+      "title": "No structured error responses; failures return HTTP 200 with a zero price",
+      "description": "The binary cannot signal failure. lookup_price (pricing.cpp) returns 0.0 both when /etc/pricing/rules.dat cannot be opened and when the SKU is not found, and main() prints the same HTML template with Content-Type: text/html and no status line, so Apache returns 200 in every case. An unknown SKU, a missing rules file, and a successful lookup of a genuinely free item are indistinguishable to the caller. A missing or non-numeric qty silently becomes 1 or 0 via atoi. There is no error code, no error body, and no retryable indicator anywhere in the response.",
+      "gap": "An agent cannot distinguish success from terminal failure from retriable failure. The most likely agent-visible outcome of a backend fault is a confidently-wrong $0.00 price rather than an error.",
+      "recommendation": "Return distinct HTTP statuses (404 unknown SKU, 400 invalid qty, 503 rules file unavailable) with a JSON body carrying code, message, and a retryable flag; never represent 'not found' as a zero price.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
-      "evidence": {"file": "pricing.cpp", "lines": "52-62"},
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "29-46"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30–60 days"
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Have the agent tool wrapper treat unit_price == 0.00 as an error condition rather than a valid price, and fail closed.",
+          "Add a synthetic canary that queries a known-priced SKU so rules-file outages surface as alerts instead of silent zeros."
+        ]
       }
     },
     {
@@ -226,19 +245,53 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No input validation — buffer overflow vulnerabilities",
-      "description": "No input validation. Uses strcpy without bounds checking on user-controlled QUERY_STRING. Buffer overflow possible. No structured validation error responses.",
-      "gap": "Malformed agent input can crash the process or corrupt memory.",
-      "recommendation": "Replace strcpy with strncpy or std::string. Add input validation with structured error responses.",
+      "title": "No input validation at the request boundary; unbounded strcpy on caller-controlled data",
+      "description": "There is no validation of any kind at the boundary. parse_query (pricing.cpp) copies the entire QUERY_STRING into a fixed 256-byte stack buffer with strcpy and no length check, then copies the attacker-controlled sku= value into a 64-byte caller buffer with a second unchecked strcpy. qty is converted with atoi, which cannot report failure and yields 0 for non-numeric input and undefined behaviour on overflow. lookup_price uses sscanf with an unbounded \"%[^|]\" conversion into a 64-byte file_sku buffer. The SKU is then reflected into the HTML response unescaped. No validation library, schema, request-size limit, or type-safe parsing exists (there is no dependency manifest and no gateway request validator in k8s/*.yaml). README.md itself records 'No bounds checking on CGI query string parsing' and 'Uses unsafe C string functions (strcpy/sprintf) - buffer overflow risk'.",
+      "gap": "Malformed inputs are not rejected — they are either silently coerced (qty) or overflow fixed buffers (sku, query string). An agent constructing a long or odd SKU crashes or corrupts the process instead of receiving a field-level rejection, and the unescaped reflection is an XSS sink for any browser-rendered consumer.",
+      "recommendation": "Validate before use: bound the query string length, replace both strcpy calls with length-checked copies (snprintf/strncpy with explicit truncation handling), parse qty with strtol and reject out-of-range values, bound the sscanf conversion ('%63[^|]'), HTML-escape the reflected SKU, and return a structured 400 naming the offending field.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {"file": "pricing.cpp", "lines": "16-22"},
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "14-27"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "60–90 days"
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Enforce a strict SKU pattern and a numeric qty range in the agent tool wrapper and at the gateway (WAF request-size and regex rules) before traffic reaches the binary.",
+          "Compile the binary with -fstack-protector-strong -D_FORTIFY_SOURCE=2 and keep the hardened Kubernetes securityContext so an overflow is contained to a non-root, capability-dropped process."
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No sandbox or staging environment for agent testing",
+      "description": "The repository defines exactly one environment. k8s/namespace.yaml declares the single namespace legacy-pricing-cgi, and k8s/deployment.yaml and k8s/configmap.yaml are not parameterized per environment (no Helm chart, no Kustomize overlays, no staging manifests). There is no docker-compose file, no seed-data or synthetic-data script, and no environment-specific IaC. The only test data is the single line 'SAMPLE-SKU|9.99' baked into /etc/pricing/rules.dat by the Dockerfile; CONTAINERIZE.md instructs operators to mount the real production rules file over that path. README.md confirms 'Pricing rules edited in-place on prod; no source of truth'.",
+      "gap": "There is no production-shaped environment in which to exercise agent behaviour. Agent testing would either run against a one-row sample dataset that cannot validate real pricing logic, or against production rules.",
+      "recommendation": "Add a staging overlay (Kustomize or Helm values) deploying the same image into a separate namespace, and supply a representative, non-production rules.dat via a ConfigMap generated from a seed script so agents can be exercised against production-shaped data.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "k8s/namespace.yaml",
+        "lines": "1-8"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Run the container locally from the committed Dockerfile with a hand-built representative rules.dat for agent integration testing before any cluster deployment.",
+          "Because the service is read-only, point the initial agent pilot at a dedicated read-only replica deployment with a copied rules file rather than the production Service."
+        ]
       }
     },
     {
@@ -246,19 +299,26 @@
       "category": "Discovery & Documentation",
       "category_display": "Discovery & Documentation",
       "category_id": "DISC",
-      "title": "No schema versioning or API contracts",
-      "description": "No schema versioning, no API contracts, no changelog, no breaking change detection. No version identifier in URL or response.",
-      "gap": "Changes to the endpoint silently break consumers.",
-      "recommendation": "Introduce API versioning and OpenAPI spec with CI validation.",
+      "title": "No schema versioning, API versioning, or breaking-change detection",
+      "description": "Neither the interface nor the data file is versioned. The endpoint path is /cgi-bin/pricing.cgi with no /v1/ segment and no Accept-Version handling (pricing.cpp reads only QUERY_STRING). The data contract is the implicit 'SKU|PRICE' pipe-delimited layout parsed inline by sscanf in lookup_price, with no schema file, no header row, and no version marker; CONTAINERIZE.md documents it only as prose. There are no JSON Schema, Avro, or Protobuf definitions, no migration files, no CHANGELOG, no deprecation notices, and no breaking-change tooling — there is no CI configuration at all (no .github/workflows, .gitlab-ci.yml, Jenkinsfile, or buildspec.yml in the repository).",
+      "gap": "Any change to the query parameters, the HTML output structure, or the rules.dat column layout silently breaks agent tool bindings, and nothing in the build detects it. README.md notes the rules file has 'no source of truth', so the data contract can change outside version control entirely.",
+      "recommendation": "Introduce a versioned route (/v1/prices) for the JSON interface recommended in API-Q1, commit a schema for the rules file format, and add an OpenAPI diff / contract test step to CI that fails on breaking changes.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
-      "evidence": {"file": "pricing.cpp", "lines": null},
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "29-46"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30–60 days"
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": [
+          "Pin the agent tool definition to a reviewed commit of pricing.cpp and require ARA re-review on any change to parse_query or lookup_price.",
+          "Bring rules.dat under version control as a ConfigMap source so data-contract changes are reviewable."
+        ]
       }
     },
     {
@@ -266,19 +326,26 @@
       "category": "Observability",
       "category_display": "Observability",
       "category_id": "OBS",
-      "title": "No distributed tracing or structured logging",
-      "description": "No tracing (no X-Ray, no OpenTelemetry). No structured logging. No correlation IDs. Agent-initiated requests are completely opaque.",
-      "gap": "Zero observability into request processing. Cannot debug agent-initiated failures.",
-      "recommendation": "Add structured JSON logging and OpenTelemetry instrumentation.",
+      "title": "No distributed tracing and no structured logging",
+      "description": "The process emits no logs and no telemetry. pricing.cpp writes only the HTML response to stdout (printf) and never logs to stderr, a file, or a logging library; there is no OpenTelemetry or X-Ray instrumentation and no traceparent/correlation-id handling (the binary reads only the QUERY_STRING environment variable, so inbound trace headers are discarded). The only observability surface is Apache's default access/error logs, whose directory is chowned to appuser in the Dockerfile; those are plain-text Common Log Format, not JSON, and carry no request or correlation identifier. No sidecar, collector, or agent is defined in k8s/deployment.yaml.",
+      "gap": "An agent-initiated failure cannot be reconstructed. There is no per-request identifier linking the agent's call to anything inside the service, no structured fields to query, and no trace context propagation.",
+      "recommendation": "Have the ingress inject and log a correlation identifier, configure Apache to emit JSON-formatted access logs including that identifier and the request duration, and ship them to CloudWatch Logs; propagate traceparent through the wrapper service introduced for API-Q1.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {"file": "pricing.cpp", "lines": null},
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "56-71"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "60–90 days"
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Enable gateway/ALB access logs with a generated request ID so agent calls are at least externally observable end to end.",
+          "Have the agent tool wrapper log the request/response pair with its own correlation ID until the service propagates one."
+        ]
       }
     },
     {
@@ -287,18 +354,25 @@
       "category_display": "Observability",
       "category_id": "OBS",
       "title": "No alerting on error rates or latency",
-      "description": "No alerting configuration. No CloudWatch alarms, no Prometheus alerts. Service degradation affecting agents would go undetected.",
-      "gap": "No alerting thresholds for the pricing endpoint.",
-      "recommendation": "Deploy Prometheus with ServiceMonitor and alerting rules for HTTP 5xx and P99 latency.",
+      "description": "No alerting exists. The repository contains no CloudWatch alarm definitions, no anomaly-detection configuration, no PagerDuty/OpsGenie integration, and no SLO definitions — there is no IaC and no monitoring manifest (k8s/ holds only namespace, configmap, deployment, and service). The sole health signalling is liveness/readiness probes in k8s/deployment.yaml hitting /cgi-bin/pricing.cgi?sku=HEALTH&qty=1, plus the container HEALTHCHECK in the Dockerfile. Those restart or deregister a pod but notify no one, and because the binary returns HTTP 200 even when the rules file is missing (see API-Q3), the probes pass while the service returns $0.00 prices.",
+      "gap": "Degradation that matters to an agent — rising latency under machine-speed load, or a missing rules file producing zero prices — triggers no alert, and the only configured health check cannot detect it.",
+      "recommendation": "Create CloudWatch alarms on ALB/gateway 5xx rate, 4xx rate, and p99 latency for the agent-facing route, and add a semantic health check that asserts a known SKU returns its expected non-zero price, alarming when it does not.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {"file": "k8s/deployment.yaml", "lines": null},
+      "evidence": {
+        "file": "k8s/deployment.yaml",
+        "lines": "38-53"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30–60 days"
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Stand up an external synthetic canary against a known SKU and alert on both failure and an unexpected zero price.",
+          "Alert on pod restart count and CPU saturation from existing Kubernetes metrics as an interim degradation signal."
+        ]
       }
     },
     {
@@ -306,19 +380,26 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "Partial IaC — no peer review or drift detection",
-      "description": "Kubernetes manifests exist providing partial IaC. No CI/CD pipeline enforcing peer review on infrastructure changes, no drift detection. Legacy scp deployment target still present.",
-      "gap": "IaC exists but lacks automated plan review, peer review enforcement, and drift detection.",
-      "recommendation": "Adopt GitOps (ArgoCD/Flux) for PR-based review. Remove legacy scp deployment path.",
+      "title": "Agent-facing integration surface is not defined as code, reviewed, or drift-monitored",
+      "description": "Only the workload is declared as code; the integration surface is not. k8s/deployment.yaml, service.yaml, configmap.yaml, and namespace.yaml define the pods and a ClusterIP Service, but the ingress, TLS, IAM roles, network policy, and WAF that would expose this service to an agent exist nowhere — the ALB Ingress is only a commented-out YAML example inside k8s/service.yaml, and CONTAINERIZE.md assigns its creation to the operator as a manual action. There is no Terraform, CloudFormation, CDK, or Helm chart in the repository. There is no CI configuration (no .github/workflows, .gitlab-ci.yml, Jenkinsfile, or buildspec.yml), so no automated plan review or required approval gates the manifests, and no AWS Config rules or drift detection are configured. Deployment is manual: CONTAINERIZE.md instructs an operator to hand-edit the image reference and run 'kubectl apply -f k8s/', and Makefile's legacy install target still scps the binary to deploy@pricing01. k8s/deployment.yaml also pins image: legacy-pricing-cgi:latest, a mutable tag, so the deployed artifact is not identifiable from the manifest.",
+      "gap": "Of the three required controls — IaC definition, enforced change review, drift detection — only partial IaC is present. The exact surface an agent would call (ingress, auth, network policy) is created by hand and is unreviewed, unversioned, and unmonitored.",
+      "recommendation": "Express the full agent-facing surface (Ingress/ALB, TLS, IAM, NetworkPolicy, WAF) as IaC in this repository, require PR review on that directory, replace the :latest tag with an immutable digest, and enable drift detection on the deployed stack.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {"file": "Makefile", "lines": "11"},
+      "evidence": {
+        "file": "CONTAINERIZE.md",
+        "lines": "60-85"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30–60 days"
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": [
+          "Require two-person review on all kubectl apply operations against the namespace and record the applied manifest revision until IaC covers the surface.",
+          "Pin the deployment to an image digest immediately so at least the running artifact is reproducible."
+        ]
       }
     },
     {
@@ -326,19 +407,26 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No CI/CD pipeline",
-      "description": "No CI/CD pipeline exists. No GitHub Actions, no GitLab CI, no Jenkinsfile. The README states no one can reproduce the build. Changes cannot be validated automatically.",
-      "gap": "No pipeline to catch API-breaking changes before deployment.",
-      "recommendation": "Create CI pipeline that builds Docker image and runs smoke tests.",
+      "title": "No CI/CD pipeline and no API contract testing",
+      "description": "There is no pipeline at all. The repository contains no .github/workflows directory, no .gitlab-ci.yml, no Jenkinsfile, and no buildspec.yml; the build is the hand-written Makefile ('make all' compiling pricing.cpp with g++), and the Dockerfile invokes that same make in its builder stage. Release is manual: CONTAINERIZE.md documents operator-run docker build / docker push / kubectl apply commands, and Makefile's install target scps the binary to deploy@pricing01. Consequently there is no contract test, no OpenAPI validation (no spec exists — see API-Q2), and no breaking-change detection step anywhere.",
+      "gap": "Nothing between a source change and production verifies that the agent-facing contract still holds. A change to parse_query's parameter names or to the HTML output structure ships undetected.",
+      "recommendation": "Add a CI pipeline that builds the image, runs the container, and asserts the agent-facing contract (known SKU returns the expected JSON/price, unknown SKU returns an error status), failing the build on contract drift.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {"file": "README.md", "lines": null},
+      "evidence": {
+        "file": "Makefile",
+        "lines": "1-15"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "60–90 days"
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Run the contract assertions manually from a documented checklist before each release and record the result.",
+          "Gate releases on a reviewed PR to pricing.cpp plus a manual smoke test of the health SKU."
+        ]
       }
     },
     {
@@ -346,39 +434,26 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "Basic Kubernetes rollback only — no automated triggers",
-      "description": "Kubernetes Deployment supports kubectl rollout undo for basic rollback. No automated rollback triggers, no canary deployment, no traffic shifting.",
-      "gap": "No automated rollback on error rate spikes. Manual intervention required.",
-      "recommendation": "Add Argo Rollouts or Flagger for automated canary with rollback.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {"file": "k8s/deployment.yaml", "lines": null},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30–60 days"
-      }
-    },
-    {
-      "question_id": "HITL-Q3",
-      "category": "Human-in-the-Loop",
-      "category_display": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No staging environment — Docker provides minimal local testing only",
-      "description": "Dockerfile enables local container execution with a single sample SKU. No dedicated staging environment with production-equivalent data.",
-      "gap": "No production-equivalent staging environment for agent testing.",
-      "recommendation": "Create staging k8s namespace with production-equivalent pricing rules data.",
+      "title": "Rollback depends on a mutable image tag and manual kubectl steps",
+      "description": "The deployment is a standard Kubernetes Deployment (k8s/deployment.yaml, replicas: 2), so 'kubectl rollout undo' is technically available, but the manifest pins image: legacy-pricing-cgi:latest — a mutable tag. If a bad build is pushed over :latest, rolling back the Deployment restores the same tag and therefore the same broken image, so the rollback is not reliably to a known-good state. There is no blue/green or canary configuration, no traffic-shifting at an ingress (the Ingress itself is only a comment in k8s/service.yaml), no CodeDeploy rollback trigger, and no feature flags. Because there is no CI/CD (ENG-Q2), rollback is an unautomated, manual operation performed by whoever ran CONTAINERIZE.md's kubectl apply.",
+      "gap": "No automated, artifact-pinned rollback path. Recovery time depends on an operator being available and on whether a distinct previous image tag happens to still exist.",
+      "recommendation": "Deploy immutable image digests (or semver tags) instead of :latest, automate rollback in the pipeline, and add progressive delivery with automatic rollback on error-rate regression at the ingress.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
-      "evidence": {"file": "Dockerfile", "lines": "46"},
+      "phase": 2,
+      "evidence": {
+        "file": "k8s/deployment.yaml",
+        "lines": "20-26"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30–60 days"
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Tag every build with the git SHA in addition to :latest and reference the SHA in the manifest, making rollback deterministic.",
+          "Document and rehearse a kubectl rollout undo runbook with the previous digest recorded at deploy time."
+        ]
       }
     },
     {
@@ -386,21 +461,24 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No write operations — idempotency not applicable",
-      "description": "The application has no write operations. All requests are read-only price lookups. Idempotency is not applicable.",
-      "gap": "N/A for current read-only scope.",
-      "recommendation": "Implement idempotency keys if write operations are added in the future.",
+      "title": "No write endpoints; idempotency is informational under read-only scope",
+      "description": "The service exposes no write operation. pricing.cpp's main() reads QUERY_STRING, performs a file lookup, and prints a computed total; it never opens a file for writing, never mutates /etc/pricing/rules.dat (lookup_price opens it with mode \"r\"), and publishes no messages. Every invocation is a side-effect-free read, so repeated identical calls are naturally idempotent. No idempotency-key handling exists, but none is required at the current scope.",
+      "gap": "None at read-only scope. Note that if a rules-management or price-override endpoint is ever added, no idempotency mechanism exists to build on, and the CGI model (one process per request, no shared state) offers no dedupe store.",
+      "recommendation": "Keep the agent scope read-only. If write capability is introduced later, require an Idempotency-Key header with server-side dedupe before exposing it to agents.",
       "severity": "Low",
-      "priority": "P3",
+      "priority": "P1",
       "effort": "Low",
-      "phase": 4,
-      "evidence": {"file": "pricing.cpp", "lines": "35-48"},
+      "phase": 3,
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "29-33"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false,
-        "conditional_resolution": "Resolved to INFO: agent_scope=read-only, no write operations exist",
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only, so idempotency of write endpoints is informational only.",
         "agent_scope": "read-only",
-        "resolution_reasoning": "Read-only agents do not execute write operations, and no write endpoints exist in this application."
+        "resolution_reasoning": "agent_scope was inferred as read-only because has_write_operations is false — pricing.cpp contains no POST/PUT/PATCH/DELETE handling, no writes to disk (rules.dat is opened \"r\"), and no message publication. With no write surface, API-Q4 cannot gate deployment and is recorded as INFO."
       }
     },
     {
@@ -408,15 +486,18 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "Response format is HTML — not ideal for agent consumption",
-      "description": "API returns Content-Type: text/html with HTML-formatted responses. LLMs can parse HTML but this adds complexity and fragility.",
-      "gap": "Agent tools must include HTML parsing logic. JSON would enable direct tool consumption.",
-      "recommendation": "Add a JSON response mode via Accept header or format query parameter.",
+      "title": "Responses are presentation HTML, not structured data",
+      "description": "The response format is a hand-assembled HTML fragment. main() in pricing.cpp emits 'Content-Type: text/html' followed by printf calls producing <h1>ACME Pricing</h1> and four <p> elements carrying SKU, Qty, Unit, and Total, with the numeric values already formatted as '$%.2f'. There is no JSON serialization, no XML marshalling, no Protobuf/Thrift definition, and no content negotiation — the format is fixed regardless of Accept header. Currency is implied by the '$' literal and is not a field.",
+      "gap": "Consumers must regex or DOM-parse presentation markup to recover values, and the price arrives as a pre-formatted display string rather than a typed number with an explicit currency.",
+      "recommendation": "Emit application/json with typed fields (unit_price and total_price as numbers, explicit currency code) as part of the API-Q1 remediation; retain HTML only behind content negotiation for legacy browser callers.",
       "severity": "Low",
       "priority": "P3",
-      "effort": "Low",
-      "phase": 4,
-      "evidence": {"file": "pricing.cpp", "lines": "52"},
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "63-71"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -427,15 +508,18 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No rate limit documentation or headers",
-      "description": "No rate limit documentation. No X-RateLimit-Remaining or Retry-After headers. Agents have no visibility into throttling limits.",
-      "gap": "Agents cannot self-throttle without rate limit headers.",
-      "recommendation": "Include standard rate limit headers when rate limiting is implemented.",
+      "title": "No rate limits documented and no rate-limit response headers",
+      "description": "No rate limit is documented anywhere and none is advertised in responses. README.md and CONTAINERIZE.md describe the endpoint and its health URL but state no throttling policy. pricing.cpp emits exactly one header — 'Content-Type: text/html' — and no X-RateLimit-Limit, X-RateLimit-Remaining, or Retry-After. There is no API Gateway usage plan, WAF rate rule, or rate-limiting middleware in the repository (the only commented gateway configuration, in k8s/service.yaml, carries no throttle annotations).",
+      "gap": "An agent has no published budget to respect and no server feedback to self-throttle against; it will discover limits only by saturating the deployment. This is the caller-visible facet of the enforcement gap in STATE-Q5.",
+      "recommendation": "Define and publish a per-client request budget alongside the API specification, and return X-RateLimit-Remaining and Retry-After from the throttling layer added for STATE-Q5.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
-      "phase": 4,
-      "evidence": {"file": "pricing.cpp", "lines": null},
+      "phase": 3,
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "63-63"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -446,18 +530,46 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No identity propagation — downgraded for stateless-utility",
-      "description": "No identity propagation mechanisms. No JWT parsing, no token exchange. Downgraded to INFO for stateless-utility archetype serving public pricing data.",
-      "gap": "No user context propagation.",
-      "recommendation": "Implement if user-specific pricing is introduced.",
+      "title": "No identity propagation; archetype-calibrated to INFO",
+      "description": "The service neither receives nor forwards identity. pricing.cpp reads only the QUERY_STRING environment variable, so Authorization headers and X-User-Id style context are discarded by the application, and it makes no outbound service calls through which identity could be propagated. There is no JWT parsing, token-exchange, or on-behalf-of flow, and no separate credential path for agent-as-self versus agent-on-behalf-of-user. Native severity for AUTH-Q4 is RISK-SAFETY, but the archetype calibration for stateless-utility downgrades it to INFO: the response is derived solely from the requested SKU and quantity against a shared reference price list, so caller identity does not change what data is returned.",
+      "gap": "No identity context flows through the service. This is acceptable while responses are identity-independent, but it means customer-specific or contract-specific pricing could not be implemented or audited safely without first adding identity propagation.",
+      "recommendation": "Preserve the identity-independence of the response. If tiered or customer-specific pricing is ever introduced, add verified identity propagation and distinguish agent-as-self from agent-on-behalf-of-user before exposing it to agents.",
       "severity": "Low",
-      "priority": "P3",
-      "effort": "Low",
-      "phase": 4,
-      "evidence": {"file": "pricing.cpp", "lines": null},
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "48-55"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No audit logging; surface-calibrated to INFO (no auth surface, no writes)",
+      "description": "The application writes no audit record: pricing.cpp logs nothing, and there is no CloudTrail configuration, log-file validation, S3 Object Lock bucket, or CloudWatch retention policy in the repository (no IaC exists; k8s/ contains only namespace, configmap, deployment, and service). Apache's default access log, whose directory is chowned to appuser in the Dockerfile, is mutable container-local plain text with no authenticated principal — and no principal exists to record, since the surface is unauthenticated. Surface-flag calibration applies: has_auth_surface is false and has_write_operations is false, so this question is recorded as INFO rather than at its scope-resolved RISK-SAFETY severity. The system executes no agent-invoked write operations, so write-attribution audit is a consumer responsibility.",
+      "gap": "No immutable, attributable log exists. There are no writes to attribute today, but there is also no tamper-evident record of which caller requested which price — relevant if pricing lookups ever become subject to dispute or audit.",
+      "recommendation": "Capture gateway access logs (with the authenticated principal added for AUTH-Q1) into CloudWatch Logs or an S3 bucket with Object Lock and a defined retention period, so read access is attributable and tamper-evident before any write capability is contemplated.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "Dockerfile",
+        "lines": "48-51"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO by surface-flag calibration: has_auth_surface=false AND has_write_operations=false, which overrides the read-only scope resolution of RISK-SAFETY.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "agent_scope was inferred read-only (has_write_operations=false), which resolves AUTH-Q6 to RISK-SAFETY; the question's surface calibration then applies because the system has neither an auth surface nor write operations, recording it as INFO. The system executes no agent-invoked writes, so write-principal audit is owned by the calling application."
       }
     },
     {
@@ -465,15 +577,18 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No agent identities to suspend",
-      "description": "No auth surface and no write operations. No identities exist to suspend.",
-      "gap": "Suspension becomes relevant when machine identity is implemented.",
-      "recommendation": "Ensure chosen identity mechanism supports per-identity revocation.",
+      "title": "No identity lifecycle to suspend; surface-calibrated to INFO",
+      "description": "The service issues and enforces no identities, so there is nothing to suspend. There are no API keys, service accounts, Cognito users, or IAM principals defined in the repository, and no revocation endpoint or disable mechanism in pricing.cpp. Surface-flag calibration applies: has_auth_surface is false and has_write_operations is false, so AUTH-Q7 is recorded as INFO rather than RISK-SAFETY. The only available isolation lever today is coarse and global — scaling the Deployment to zero or deleting the Service in k8s/service.yaml, which removes access for every caller at once.",
+      "gap": "No per-caller revocation is possible, because no per-caller identity exists. Containing a misbehaving agent currently requires taking the whole service offline.",
+      "recommendation": "When machine identity is added for AUTH-Q1, issue one credential per agent at the gateway so an individual credential can be revoked without affecting other callers.",
       "severity": "Low",
-      "priority": "P3",
-      "effort": "Low",
-      "phase": 4,
-      "evidence": {"file": "k8s/service.yaml", "lines": null},
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "k8s/service.yaml",
+        "lines": "40-45"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -484,21 +599,24 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No write operations — compensation/rollback not applicable",
-      "description": "No write operations exist. Compensation/rollback is not applicable for this stateless-utility.",
-      "gap": "Not applicable.",
-      "recommendation": "No action required unless write operations are introduced.",
+      "title": "No multi-step write sequences requiring compensation; archetype-calibrated to INFO",
+      "description": "There is nothing to compensate. Each request is a single, self-contained, side-effect-free computation: main() in pricing.cpp parses the query string, reads /etc/pricing/rules.dat in read mode, multiplies unit price by quantity, prints HTML, and exits. There is no saga, two-phase commit, undo endpoint, or Step Functions workflow, and none is needed — no persistent state is mutated and no downstream service is called, so a failure mid-request leaves no partial state behind. The archetype calibration for stateless-utility records this as INFO, consistent with the read-only agent scope.",
+      "gap": "None at the current scope. The absence of any transactional framework means that adding a multi-step write workflow later would start from zero compensation capability, in a CGI process model with no shared state between requests.",
+      "recommendation": "Keep the service stateless and side-effect-free. Any future write workflow should be implemented outside the CGI binary in a component that supports compensating transactions.",
       "severity": "Low",
-      "priority": "P3",
+      "priority": "P0",
       "effort": "Low",
-      "phase": 4,
-      "evidence": {"file": "pricing.cpp", "lines": null},
+      "phase": 3,
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "48-72"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false,
-        "conditional_resolution": "Resolved to INFO: stateless-utility with no write operations",
+        "conditional_resolution": "Resolved to INFO: archetype calibration for stateless-utility records STATE-Q1 as INFO; the read-only agent_scope independently resolves it below BLOCKER.",
         "agent_scope": "read-only",
-        "resolution_reasoning": "Stateless-utility archetype with no write operations — compensation/rollback has no applicable surface."
+        "resolution_reasoning": "has_write_operations is false — the binary opens its only data file read-only and performs no mutation — so agent_scope was inferred read-only, resolving STATE-Q1 to RISK-SAFETY; the stateless-utility archetype calibration then records it as INFO because there are no multi-step write sequences in the service."
       }
     },
     {
@@ -506,15 +624,18 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "Read-only application — transaction limits not applicable",
-      "description": "Application is read-only. No records modified, no spend triggered. Transaction limits not applicable.",
-      "gap": "Not applicable for read-only scope.",
-      "recommendation": "No action required for current read-only scope.",
+      "title": "No business transaction limits; scope-calibrated to INFO",
+      "description": "No business-domain limits exist: there is no per-caller cap on records affected, no spend threshold, and no bulk-operation size limit in pricing.cpp or k8s/*.yaml. One quantifiable gap does exist — qty is taken from the query string via atoi with no upper bound and multiplied directly into the returned total (double total = unit * qty), so a caller can request an arbitrarily large quantity and receive an arbitrarily large quoted total. Because agent_scope is read-only, this produces no state change or spend; the blast radius of the worst case is a misleading quote, not a committed transaction. Scope calibration therefore records STATE-Q6 as INFO.",
+      "gap": "No bound on caller-supplied quantity, so quoted totals are unbounded and negative quantities are accepted (atoi parses '-5'), yielding negative totals. Harmless while nothing acts on the quote; material if a downstream workflow ever consumes it.",
+      "recommendation": "Validate qty into a sane business range (positive, with a documented maximum) as part of the DATA-Q4 remediation, and introduce per-caller business limits before any write capability is exposed to agents.",
       "severity": "Low",
-      "priority": "P3",
+      "priority": "P2",
       "effort": "Low",
-      "phase": 4,
-      "evidence": {"file": "pricing.cpp", "lines": null},
+      "phase": 3,
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "22-24"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -525,25 +646,40 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "Public pricing data — not a sensitive data target",
-      "description": "Stage A = No. System handles public product pricing data (SKU codes and prices from flat file). Not PII, PHI, financial records, or credentials.",
-      "gap": "None — data is public/reference-grade.",
-      "recommendation": "No action required unless user-specific pricing is introduced.",
+      "title": "Not a sensitive-data handling target; no PII, PHI, financial records, or credentials",
+      "description": "Stage A of DATA-Q1 resolves to No. has_persistent_data_store is false: the only data the system reads is /etc/pricing/rules.dat, a pipe-delimited SKU-to-price reference list (lookup_price in pricing.cpp; the Dockerfile seeds it with the single line 'SAMPLE-SKU|9.99'), containing no user identifiers, health records, financial instruments, or credentials. has_logging_of_user_data is false: the binary logs nothing. The service's purpose — product price lookup — is not a regulated data domain, and CONTAINERIZE.md confirms 'No secrets are required by this application'. The stateless-utility archetype calibration independently records this question as INFO. Stage B was therefore not evaluated.",
+      "gap": "None. No sensitive fields exist to scope out of agent-facing responses; the response echoes only the caller's own SKU and quantity plus a reference price.",
+      "recommendation": "Re-run this assessment if the service is ever extended to customer-specific or contract pricing, which would introduce customer identifiers and commercially sensitive terms into responses.",
       "severity": "Low",
-      "priority": "P3",
+      "priority": "P0",
       "effort": "Low",
-      "phase": 4,
-      "evidence": {"file": "pricing.cpp", "lines": "33-45"},
+      "phase": 3,
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "29-46"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false,
-        "conditional_resolution": "Resolved to INFO: Stage A = No, system handles public reference data only",
+        "conditional_resolution": "Resolved to INFO: Stage A = No (not a data-handling target), and the stateless-utility archetype calibration also records DATA-Q1 as INFO. Stage B skipped.",
         "agent_scope": "read-only",
-        "resolution_reasoning": "Pricing data is public/reference-grade (SKU|PRICE pairs). Not a data-handling target for sensitive data.",
+        "resolution_reasoning": "No PII, PHI, financial records, or credentials are stored, processed, or logged — the sole data source is a SKU/price reference file and nothing is logged — so the Stage A scope gate returns No and the question cannot resolve to BLOCKER regardless of scope.",
         "data_q1_subchecks": {
-          "b1": {"fired": false, "severity": null, "reasoning": "Stage A = No, skipped."},
-          "b2": {"fired": false, "severity": null, "reasoning": "Stage A = No, skipped."},
-          "b3": {"fired": false, "severity": null, "reasoning": "Stage A = No, skipped."}
+          "b1": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Not evaluated — Stage A returned No, so no agent-facing response scoping check applies. The response contains only caller-supplied SKU/qty and a reference unit price."
+          },
+          "b2": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Not evaluated — Stage A returned No. There is no sensitive data domain to differentiate access to (the separate finding that no access control exists at all is recorded under AUTH-Q2)."
+          },
+          "b3": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Not evaluated — Stage A returned No. Formal classification metadata is not expected for a non-data-handling reference-price utility."
+          }
         }
       }
     },
@@ -552,21 +688,24 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No persistent data store — residency not applicable",
-      "description": "No persistent data store and no user-data logging. Static reference pricing data with no residency requirements.",
-      "gap": "Not applicable.",
-      "recommendation": "No action required.",
+      "title": "No data subject to residency or sovereignty constraints",
+      "description": "Surface-flag calibration applies: has_persistent_data_store is false and has_logging_of_user_data is false, so the system holds no data subject to residency requirements and DATA-Q2 is recorded as INFO. The only data read is the SKU/price reference file /etc/pricing/rules.dat (pricing.cpp, lookup_price), which contains no personal data; nothing is persisted or logged. No GDPR/LGPD/HIPAA references, region-pinned storage configuration, or cross-region replication settings appear anywhere in the repository (searched README.md, CONTAINERIZE.md, and all k8s manifests; no IaC exists). The stateless-utility archetype calibration points to the same result.",
+      "gap": "None for the data the system holds. Note that no region constraint is expressed in configuration either, so if customer-specific pricing is introduced later there is no residency control to inherit.",
+      "recommendation": "If the pricing rules ever incorporate customer- or contract-specific data, document the applicable residency constraints and pin storage and any LLM endpoint to the required jurisdiction before granting agent access.",
       "severity": "Low",
-      "priority": "P3",
+      "priority": "P1",
       "effort": "Low",
-      "phase": 4,
-      "evidence": {"file": "k8s/configmap.yaml", "lines": null},
+      "phase": 3,
+      "evidence": {
+        "file": "CONTAINERIZE.md",
+        "lines": "52-66"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false,
-        "conditional_resolution": "Resolved to INFO: no persistent data store and no user-data logging — residency not applicable",
+        "conditional_resolution": "Resolved to INFO by surface-flag calibration: has_persistent_data_store=false AND has_logging_of_user_data=false, so no data is subject to residency constraints.",
         "agent_scope": "read-only",
-        "resolution_reasoning": "System holds no persistent user data. Pricing rules are static reference data in a flat file."
+        "resolution_reasoning": "agent_scope was inferred read-only (no write operations), which would resolve DATA-Q2 to RISK-SAFETY; the surface calibration takes precedence because the system holds and logs no regulated data — its only data source is a non-personal SKU/price reference file."
       }
     },
     {
@@ -574,15 +713,40 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No user data or PII handled — log redaction not applicable",
-      "description": "System does not log user data and holds no PII. Stateless-utility archetype does not handle user PII.",
-      "gap": "Not applicable.",
-      "recommendation": "No action required.",
+      "title": "No user-data logging pipeline where PII could leak",
+      "description": "Surface-flag calibration applies: has_logging_of_user_data is false and has_persistent_data_store is false, so DATA-Q6 is recorded as INFO. pricing.cpp emits no log output at all — its only writes are the HTML response on stdout — and holds no user data. No log-scrubbing middleware, masking library, CloudWatch log filter, or Macie integration exists, but there is also no pipeline carrying user content into logs. The stateless-utility archetype calibration gives the same result. One residual consideration: Apache's default access log (its directory is chowned to appuser in the Dockerfile) records the full request line including the query string, so caller-supplied SKU values are captured verbatim in container-local logs; SKUs are product identifiers, not PII, but a caller that passes unexpected content in the sku parameter would see it persisted there unredacted.",
+      "gap": "No redaction exists for the one surface that does capture caller input — the Apache access log's query string. Low consequence today because the parameter space is product SKUs and quantities.",
+      "recommendation": "If access logs are shipped to a central platform, configure the log format to exclude or hash the query string, and keep the documented parameter contract limited to non-personal identifiers.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "Dockerfile",
+        "lines": "48-51"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Field names are short but semantically interpretable",
+      "description": "The externally visible vocabulary is small and readable rather than coded. The query parameters are sku and qty (parse_query in pricing.cpp), and the response labels are SKU, Qty, Unit, and Total (main()). Internal identifiers follow the same pattern: lookup_price, file_sku, unit, total. These are common commerce abbreviations an LLM resolves without a lookup table — there are no legacy mainframe-style codes such as CUST_TYP_CD. Two mild ambiguities remain: 'Unit' and 'Total' do not state that they are prices or name a currency (the '$' is a hardcoded literal in the printf format), and 'qty' is abbreviated. No data dictionary exists in the repository, and none is needed at this vocabulary size.",
+      "gap": "Minor only: field labels omit units and currency, which an agent must infer from the '$' glyph embedded in the formatted string.",
+      "recommendation": "When the JSON interface from API-Q1 is introduced, use explicit names (unit_price, total_price, quantity) and an ISO-4217 currency field so no inference is required.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
-      "phase": 4,
-      "evidence": {"file": "pricing.cpp", "lines": null},
+      "phase": 3,
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": "14-27"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -593,15 +757,18 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No automated tests — INFO for stateless-utility",
-      "description": "No automated tests exist. README states correctness is validated by spot-checking output. Evaluated as INFO for stateless-utility archetype.",
-      "gap": "No test coverage for agent-consumed endpoint.",
-      "recommendation": "Add basic smoke tests validating price lookups for known SKUs.",
+      "title": "No automated tests of any kind; archetype-calibrated to INFO",
+      "description": "The repository contains no tests. There is no test directory, no test framework dependency (there is no dependency manifest at all), and no API test suite — Makefile defines only all, install, and clean targets, and no CI configuration exists to run tests in. README.md states this directly under Known Issues: 'No tests; correctness validated by spot-checking output'. ENG-Q4 is calibrated to INFO for the stateless-utility archetype. Untested behaviour that would matter to an agent is nonetheless concrete: unknown-SKU handling, missing-rules-file handling, quantity coercion by atoi, and the response field layout are all unverified.",
+      "gap": "No regression safety net for the agent-facing contract. Input handling, output format, and error behaviour are entirely unverified, which compounds the absence of contract testing in ENG-Q2.",
+      "recommendation": "Add a small black-box test suite that runs the container and asserts known-SKU pricing, unknown-SKU behaviour, missing-rules-file behaviour, and oversized/negative qty rejection, then execute it in the CI pipeline added for ENG-Q2.",
       "severity": "Low",
       "priority": "P3",
-      "effort": "Low",
-      "phase": 4,
-      "evidence": {"file": "README.md", "lines": null},
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "README.md",
+        "lines": "14-21"
+      },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -609,22 +776,111 @@
     }
   ],
   "evaluations": [
-    {"question_id": "AUTH-Q5", "category_id": "AUTH", "title": "Credential Management", "status": "pass", "reason": "Application uses no credentials. Reads from local flat file with no external service connections."},
-    {"question_id": "DATA-Q7", "category_id": "DATA", "title": "Data Quality Awareness", "status": "pass", "reason": "No persistent data store and no data-quality tooling — informational signal, no finding emitted."},
-    {"question_id": "DISC-Q2", "category_id": "DISC", "title": "Semantically Meaningful Field Names", "status": "pass", "reason": "Query parameters (sku, qty) and response fields are semantically clear and human-readable."},
-    {"question_id": "DISC-Q3", "category_id": "DISC", "title": "Data Catalog / Metadata Layer", "status": "pass", "reason": "No persistent data store and no metadata/catalog surface — informational signal, no finding emitted."},
-    {"question_id": "OBS-Q3", "category_id": "OBS", "title": "Business Outcome Metrics", "status": "pass", "reason": "No metrics or telemetry surface — informational signal, no finding emitted."},
-    {"question_id": "API-Q6", "category_id": "API", "title": "Asynchronous Operation Support", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no long-running operations detected for stateless-utility."},
-    {"question_id": "API-Q7", "category_id": "API", "title": "Event Emission for State Changes", "status": "not_evaluated_extended", "reason": "Extended question not triggered — stateless-utility has no state changes."},
-    {"question_id": "STATE-Q2", "category_id": "STATE", "title": "Queryable Current State", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no persistent state (stateless-utility)."},
-    {"question_id": "STATE-Q3", "category_id": "STATE", "title": "Concurrency Controls", "status": "not_evaluated_extended", "reason": "Extended question not triggered — agent_scope is read-only AND no persistent state."},
-    {"question_id": "STATE-Q4", "category_id": "STATE", "title": "Circuit Breakers and Resilience", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no external dependencies (reads local file only)."},
-    {"question_id": "STATE-Q7", "category_id": "STATE", "title": "Graceful Degradation Signaling", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no P0 priority or critical path designation."},
-    {"question_id": "HITL-Q1", "category_id": "HITL", "title": "Draft/Pending State", "status": "not_evaluated_extended", "reason": "Extended question not triggered — agent_scope is read-only."},
-    {"question_id": "HITL-Q2", "category_id": "HITL", "title": "Configurable Approval Gates", "status": "not_evaluated_extended", "reason": "Extended question not triggered — agent_scope is read-only."},
-    {"question_id": "DATA-Q3", "category_id": "DATA", "title": "Selective Query Support", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no list/query endpoints with unbounded results."},
-    {"question_id": "DATA-Q5", "category_id": "DATA", "title": "Temporal Metadata and Freshness", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no persistent state (stateless-utility)."},
-    {"question_id": "ENG-Q5", "category_id": "ENG", "title": "Encryption at Rest", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no persistent data stores."}
+    {
+      "question_id": "API-Q6",
+      "category_id": "API",
+      "title": "Asynchronous Operation Support",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered — no operation exceeds 30s and no long-running workflow exists. pricing.cpp performs a single in-process file scan of /etc/pricing/rules.dat and returns synchronously; no background job framework, queue, or job-status endpoint is present in the repository."
+    },
+    {
+      "question_id": "API-Q7",
+      "category_id": "API",
+      "title": "Event Emission for State Changes",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered — the service has no state changes to emit events for (archetype stateless-utility, has_write_operations=false). No webhook, SNS/EventBridge/SQS, Kafka, or CDC integration exists."
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category_id": "AUTH",
+      "title": "Credential Management",
+      "status": "pass",
+      "reason": "No credentials are embedded anywhere. pricing.cpp contains no password/secret/api_key literals and no credential-bearing environment reads (it reads only QUERY_STRING); k8s/configmap.yaml holds only PRICING_RULES_PATH and SERVER_NAME; no .env file is committed (.gitignore excludes .env and .env.*) and the Dockerfile sets no credential values. CONTAINERIZE.md states no secrets are required and directs future credentials to Kubernetes Secrets rather than the ConfigMap. The Makefile install target relies on an operator's own SSH identity for scp rather than a stored credential."
+    },
+    {
+      "question_id": "STATE-Q2",
+      "category_id": "STATE",
+      "title": "Queryable Current State",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered — the service holds no persistent state (has_persistent_data_store=false, archetype stateless-utility). Each CGI invocation computes a price from a reference file and exits with no state to inspect."
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category_id": "STATE",
+      "title": "Concurrency Controls",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered — the trigger requires agent_scope=write-enabled AND persistent state; agent_scope is read-only and the service has neither writes nor persistent state. Concurrent requests are isolated CGI processes that only read /etc/pricing/rules.dat."
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category_id": "STATE",
+      "title": "Circuit Breakers and Resilience",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered — the service has no external dependencies. pricing.cpp makes no network or outbound service calls; its only dependency is the local file /etc/pricing/rules.dat, and no HTTP client, retry, or circuit-breaker library is present (there is no dependency manifest)."
+    },
+    {
+      "question_id": "STATE-Q7",
+      "category_id": "STATE",
+      "title": "Graceful Degradation Signaling",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered — no priority was supplied in additionalPlanContext and no critical-path designation exists in the repository. (The related inability to signal a missing rules file is captured as a finding under API-Q3.)"
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category_id": "HITL",
+      "title": "Draft/Pending State",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered — trigger requires agent_scope=write-enabled; agent_scope was inferred read-only because has_write_operations is false. There are no state changes for a draft state to hold."
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category_id": "HITL",
+      "title": "Configurable Approval Gates",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered — trigger requires agent_scope=write-enabled; agent_scope was inferred read-only because has_write_operations is false. There are no executable operations to gate behind approval."
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category_id": "DATA",
+      "title": "Selective Query Support",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered — there are no list or query endpoints with potentially unbounded results. The single operation is a point lookup of one SKU returning a fixed four-field response (pricing.cpp), so result-set size is inherently bounded and pagination is not applicable."
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category_id": "DATA",
+      "title": "Temporal Metadata and Freshness",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered — the service has no persistent state (has_persistent_data_store=false, archetype stateless-utility). The rules file is re-read from disk on every request, so responses always reflect the current file contents; there is no cache or eventually-consistent store whose freshness would need signalling."
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category_id": "DATA",
+      "title": "Data Quality Awareness",
+      "status": "pass",
+      "reason": "Informational-absence suppression applies — no persistent data store and no data-quality tooling of any kind exists (no dashboards, profiling reports, null-rate monitoring, duplicate detection, or freshness SLAs in the repository), so an INFO finding would carry no actionable signal."
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category_id": "DISC",
+      "title": "Data Catalog / Metadata Layer",
+      "status": "pass",
+      "reason": "Informational-absence suppression applies — has_persistent_data_store is false and there is no catalog or metadata surface at all (no Glue catalog, DataHub/Collibra/Alation reference, data dictionary, or metadata file in the repository), so no actionable INFO signal exists."
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category_id": "OBS",
+      "title": "Business Outcome Metrics",
+      "status": "pass",
+      "reason": "Informational-absence suppression applies — the system emits no metrics or telemetry of any kind. pricing.cpp makes no metric calls, and no custom dashboard, put_metric_data usage, or business KPI alarm exists in the repository, so there is no observability surface to assess."
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category_id": "ENG",
+      "title": "Encryption at Rest for Agent-Accessible Data",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered — the service has no persistent data store (has_persistent_data_store=false). The only data at rest is the non-sensitive SKU/price reference file baked into the container image or mounted from a ConfigMap per CONTAINERIZE.md; no S3/RDS/DynamoDB/EBS resource or kms_key_id configuration exists in the repository."
+    }
   ],
   "remediation_roadmap": {
     "phases": [1, 2, 3],
@@ -632,58 +888,58 @@
       {
         "phase": 1,
         "phase_name": "Blockers",
-        "findings": ["API-Q1", "AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "AUTH-Q6", "STATE-Q5"],
-        "summary": "Resolve both BLOCKERs (API interface and machine identity) and address critical safety risks (scoped permissions, audit logging, rate limiting) to unblock a scoped pilot."
+        "findings": ["API-Q1", "AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "STATE-Q5"],
+        "summary": "Create a callable, identified, bounded integration surface. Put an authenticating, scope-enforcing, rate-limited gateway in front of the CGI binary and expose a documented JSON contract instead of HTML. Nothing else in the roadmap is meaningful until a caller can be identified and throttled."
       },
       {
         "phase": 2,
-        "phase_name": "Safety",
-        "findings": ["API-Q2", "API-Q3", "DATA-Q4", "DISC-Q1", "OBS-Q1", "OBS-Q2", "ENG-Q1", "ENG-Q2"],
-        "summary": "Improve API quality (spec, errors, validation), establish observability (tracing, alerting), and formalize infrastructure governance and CI/CD."
+        "phase_name": "Quality",
+        "findings": ["API-Q2", "API-Q3", "DATA-Q4", "DISC-Q1", "OBS-Q1", "OBS-Q2", "ENG-Q1", "ENG-Q2", "ENG-Q3", "HITL-Q3"],
+        "summary": "Make the surface trustworthy and operable: publish and CI-validate a machine-readable spec, return real error statuses instead of $0.00, validate and bound inputs (eliminating the strcpy overflows), add correlation-ID logging and latency/error alerting, codify the ingress as IaC with immutable image digests, and stand up a staging namespace with representative pricing data."
       },
       {
         "phase": 3,
-        "phase_name": "Quality",
-        "findings": ["ENG-Q3", "HITL-Q3"],
-        "summary": "Enhance deployment maturity with automated rollback and establish a staging environment for agent testing."
+        "phase_name": "Design Inputs",
+        "findings": ["API-Q4", "API-Q5", "API-Q8", "AUTH-Q4", "AUTH-Q6", "AUTH-Q7", "STATE-Q1", "STATE-Q6", "DATA-Q1", "DATA-Q2", "DATA-Q6", "DISC-Q2", "ENG-Q4"],
+        "summary": "Architecture inputs and low-cost hardening: typed JSON fields with explicit currency, published rate-limit headers, attributable access logs, per-agent revocable credentials, quantity bounds, and a black-box test suite. Re-assess the read-only-scope INFOs if write capability is ever added."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Add JSON API response mode to CGI endpoint",
-      "question_ids": ["API-Q1", "API-Q3", "API-Q5"],
-      "priority": "P0",
-      "effort": "Low",
-      "rationale": "Unblocks agent tool binding by providing structured, machine-readable responses instead of HTML."
-    },
-    {
-      "action": "Deploy API Gateway with authentication and rate limiting",
-      "question_ids": ["AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "AUTH-Q6", "STATE-Q5", "API-Q8"],
+      "action": "Front the CGI binary with an authenticating, rate-limited API gateway",
+      "question_ids": ["AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "AUTH-Q7", "STATE-Q5", "API-Q8"],
       "priority": "P0",
       "effort": "Medium",
-      "rationale": "Resolves identity BLOCKER and multiple safety risks in a single infrastructure change. API Gateway provides auth, scoping, audit logging, and throttling."
+      "rationale": "The binary has no authentication, no authorization, and no throttle, and Apache is configured with 'Require all granted'. A gateway is the only way to add machine identity, per-agent scopes, per-credential revocation, and a request budget without rewriting 2004-era C++ — and it resolves the largest cluster of findings in one change."
     },
     {
-      "action": "Create OpenAPI specification",
-      "question_ids": ["API-Q2", "DISC-Q1"],
-      "priority": "P2",
-      "effort": "Low",
-      "rationale": "Enables automated agent tool generation and establishes an API contract for breaking change detection."
+      "action": "Publish a versioned JSON pricing API with an OpenAPI specification",
+      "question_ids": ["API-Q1", "API-Q2", "API-Q3", "API-Q5", "DISC-Q1", "DISC-Q2"],
+      "priority": "P0",
+      "effort": "High",
+      "rationale": "Today integration requires scraping HTML produced by printf, and failures return HTTP 200 with a $0.00 price. A versioned JSON contract with real error statuses and a committed OpenAPI document is the prerequisite for any reliable agent tool binding."
     },
     {
-      "action": "Establish CI/CD pipeline with GitOps deployment",
-      "question_ids": ["ENG-Q1", "ENG-Q2", "ENG-Q3"],
-      "priority": "P2",
+      "action": "Harden query-string parsing and input validation in pricing.cpp",
+      "question_ids": ["DATA-Q4", "STATE-Q6"],
+      "priority": "P1",
       "effort": "Medium",
-      "rationale": "Enables automated testing, infrastructure review, and deployment rollback capabilities."
+      "rationale": "parse_query strcpy's the caller-controlled QUERY_STRING into a 256-byte stack buffer and the sku value into a 64-byte buffer with no length checks, atoi silently coerces qty, and the SKU is reflected into HTML unescaped. Agents generate long and unusual inputs at machine speed, which makes this the most likely path to a crash or corruption."
     },
     {
-      "action": "Add observability stack (tracing, logging, alerting)",
-      "question_ids": ["OBS-Q1", "OBS-Q2"],
-      "priority": "P2",
+      "action": "Add a CI pipeline with contract tests, immutable image tags, and automated rollback",
+      "question_ids": ["ENG-Q1", "ENG-Q2", "ENG-Q3", "ENG-Q4", "HITL-Q3"],
+      "priority": "P1",
       "effort": "Medium",
-      "rationale": "Makes agent-initiated requests debuggable and enables detection of service degradation."
+      "rationale": "There is no pipeline, no test, and the Deployment pins the mutable tag :latest, so rollback can restore the same broken image. Agent-facing contract changes currently ship unverified and cannot be reliably reverted."
+    },
+    {
+      "action": "Instrument the agent-facing route with correlation-ID logging, semantic health checks, and alerting",
+      "question_ids": ["OBS-Q1", "OBS-Q2", "AUTH-Q6", "DATA-Q6"],
+      "priority": "P1",
+      "effort": "Medium",
+      "rationale": "The binary logs nothing and the existing probes return 200 even when the rules file is missing, so a silent $0.00-price outage is undetectable. Correlation IDs plus a known-SKU canary make agent-initiated failures diagnosable, and gateway access logs with the authenticated principal give read attribution."
     }
   ]
 }

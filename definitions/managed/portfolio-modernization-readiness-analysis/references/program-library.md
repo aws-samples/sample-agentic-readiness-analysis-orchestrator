@@ -4,7 +4,7 @@
 >
 > **Scope:** Program recommendations are an engagement-level decision and are produced ONLY by the two portfolio TDs — never by the per-repo ARA or MOD TDs. The portfolio view has the cross-repo and customer-segment context required to qualify these programs.
 >
-> **Scope of catalog:** Programs indexed: 42 — Tier 1 detailed: 34 (31 from the source library + 3 ARA agentic anchor programs); Tier 2 compact index: 8.
+> **Scope of catalog:** 40 programs, each with a `[TAG]` and a status. Tier 1 entries carry full detail (signal patterns, do-not-recommend conditions, how to engage); Tier 2 is a compact situational index. The count is enforced by `harness/scorer-prompt-sync.py`, which fails if a program here is missing from the portfolio scorer prompts.
 
 ---
 
@@ -16,7 +16,7 @@ After the portfolio analysis has produced its findings (cross-cutting BLOCKERs/R
 2. **Cap at 3–5 recommendations per report.** Never exceed 5. Fewer is better than overwhelming the customer.
 3. **Prioritize in this order:**
    1. Direct finding match (the strongest signal pattern matches an actual finding)
-   2. Customer segment fit (Enterprise / SMB / ISV / Startup / WWPS — inferred from portfolio `context` and `service_inventory`)
+   2. Customer segment fit (Enterprise / SMB / ISV / Startup / Public Sector — inferred from portfolio `context` and `service_inventory`)
    3. Entry-point programs (no prerequisites) before follow-on programs (with prerequisites)
 4. **Group recommendations under two headings, in this order:** `Funded Programs` → `Engagement Models`. Assessments, credits, tools, and self-service resources map under Funded Programs; hands-on engagements, workshops, and training map under Engagement Models.
 5. **Never recommend programs marked `Retiring`** and never recommend programs marked `Launching` unless the launch is imminent (see Status Key below).
@@ -77,7 +77,7 @@ This library is consumed by two different analyses with different finding vocabu
 - **Signal patterns:** Portfolio shows 3+ services in `Pilot-Ready` or `Agent-Ready` state, or business has defined customer/employee experience goals but lacks a technical implementation roadmap.
 - **DO NOT recommend when:** Customer has fewer than 3 services at `Pilot-Ready`+; customer needs modernization before AI (recommend MAP/AppMod); customer already has an agentic implementation plan.
 - **How to evaluate:** Count services with profile `Agent-Ready` or `Pilot-Ready`. If count >= 3, recommend AXE. Also recommend if the portfolio `context` describes experience-level goals (e.g., "customer support agent", "employee productivity") without a corresponding technical implementation plan.
-- **What the customer gets:** A strategic methodology built on the proven D2E methodology (580+ successful engagements) delivering a six-phase framework: business process mapping, task identification, evaluation metrics, data architecture, governance, and guardrails. The Guardrails & Boundaries phase aligns with ARA — together they provide a complete assess-to-implement pathway: ARA validates system readiness while AXE designs the agent experience and implementation roadmap.
+- **What the customer gets:** A strategic methodology delivering a six-phase framework: business process mapping, task identification, evaluation metrics, data architecture, governance, and guardrails. The Guardrails & Boundaries phase aligns with ARA — together they provide a complete assess-to-implement pathway: ARA validates system readiness while AXE designs the agent experience and implementation roadmap.
 - **How to engage:** Talk to your AWS account team about AXE. Given your portfolio's agentic readiness, this engagement designs the agent experience and implementation roadmap.
 - **Segment:** Enterprise.
 - **Sequencing:** Run after AI DLC to design the agent experience.
@@ -466,6 +466,20 @@ This library is consumed by two different analyses with different finding vocabu
 - **Prerequisite:** None.
 - **Pairs with:** DBC, DBOLA, MAP.
 
+### FORGE Data Platform Readiness Assessment `[ARA]` `Active`
+
+- **Signal patterns:** One or more data-serving services have a unified High finding in Data Accessibility or Authentication & Authorization, and the cause is in the data platform rather than the service code. A service counts as data-serving when its findings or context name Amazon S3, AWS Glue, Amazon Athena, Amazon Redshift, AWS Lake Formation, Amazon DynamoDB, Amazon Aurora/RDS, Amazon OpenSearch Service or Amazon Bedrock Knowledge Bases. Data-platform causes include shared or broad data-store credentials, no row- or column-level access scoping, no data classification or PII tagging, no freshness or provenance metadata, and data access that can't be traced to an individual agent identity. Strongest when the same pattern repeats across 2+ data-serving services.
+- **DO NOT recommend when:** No service reads from or writes to a data store or query engine; High findings are limited to API Surface, State Management, Human-in-the-Loop, or Discovery & Documentation; every relevant High can be fixed in the service's own code (e.g., AUTH-Q1 machine-identity auth at the API edge; recommend the direct fix instead); the data platform is not on AWS; the customer has completed a FORGE assessment in the last quarter.
+- **How to evaluate:** Use the per-repo report text (findings, evaluations, context), not repository source. The portfolio TD reads only `*-ara-report.json` files, so a data store counts only when the report text names it.
+- **Important distinction:** ARA Data Accessibility and Authentication & Authorization = can this service safely hand data to an agent (code layer). FORGE = is the data platform behind the service governed, traceable, and scoped for agent access (account layer). SHIP = are foundational AWS security services enabled. AI Security Review = the AI workload's own security posture. FORGE does not re-assess application code and does not replace ARA.
+- **What the customer gets:** Read-only assessment of the data platform behind the analyzed services. Probes 30+ AWS services through a least-privilege role deployed with CloudFormation (metadata only; no data reads, no writes). Scores 142 criteria across 9 pillars into a 0–100 data platform score and maturity band, with a remediation roadmap ordered by stack and mapped to AWS services.
+- **How to engage:** Self-service: run the open-source assessment from https://github.com/aws-samples/sample-data-assessment-for-ai-readiness. Or ask your AWS account team or an AWS Partner to run a FORGE data platform assessment.
+- **Time to value:** Days.
+- **Segment:** All.
+- **Sequencing:** Run after the portfolio ARA pass identifies the data-serving services. The roadmap feeds the data architecture phase of AXE.
+- **Prerequisite:** Ability to deploy the read-only assessment role in the AWS account(s) that host the data platform.
+- **Pairs with:** SHIP, AI Security Review, AXE, Innovation EBA, Well-Architected Review.
+
 ---
 
 ## TIER 2: COMPACT INDEX (Situational programs)
@@ -476,7 +490,7 @@ This library is consumed by two different analyses with different finding vocabu
 
 | Program | Tag | Status | When to Surface | What Customer Gets |
 |---------|-----|--------|----------------|-------------------|
-| Oracle DB@AWS Pilot Promotion | `[MOD]` | Active | MOD `Move to Managed Databases` + Oracle detected (NAMER only) | Funded Oracle-to-AWS database migration |
+| Oracle DB@AWS Pilot Promotion | `[MOD]` | Active | MOD `Move to Managed Databases` + Oracle detected (available in North America) | Funded Oracle-to-AWS database migration |
 | Kafka Migration Program | `[MOD]` | Active | MOD `Move to Managed Analytics` + Kafka/streaming detected | Funded Kafka-to-MSK migration with MSK Replicator |
 | SAP on AWS | `[MOD]` | Active | SAP workloads detected in findings or `context` | Funded SAP migration and optimization on AWS |
 | Mainframe Modernization | `[MOD]` | Active | COBOL/mainframe workloads detected in `context` | Assessment, replatform, or refactor for mainframe applications |
@@ -553,6 +567,6 @@ Before finalizing the recommendation list, verify each item:
 
 ---
 
-*Last updated: June 15, 2026*
+*Last updated: Oct 7, 2026*
 *Compiled from public AWS program documentation*
-*Total programs indexed: 43 — Tier 1 detailed: 35 (31 from source + 3 ARA agentic anchors + 1 AI security); Tier 2 compact: 8*
+*Total programs indexed: 44 — Tier 1 detailed: 35 (31 from source + 3 ARA agentic anchors + 1 AI security + 1 data platform); Tier 2 compact: 8*

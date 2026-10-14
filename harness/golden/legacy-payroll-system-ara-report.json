@@ -1,50 +1,57 @@
 {
+  "repo_name": "legacy-payroll-system",
   "metadata": {
     "analysis_type": "ara",
-    "analysis_date": "2026-08-21",
+    "analysis_date": "2026-10-13",
     "td_version": "agentic-readiness-analysis",
-    "repo_name": "legacy-payroll-system",
-    "portfolio_name": null,
+    "portfolio_name": "ARA",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
+    "repo_type_justification": "Application source with a deployable entry point is present (src/PAYRUN.cbl PROCEDURE DIVISION / MAIN-PARA, invoked as PGM=PAYRUN by jcl/PAYRUN.jcl) with no multiple service units, no library packaging manifest, and no resource-provisioning IaC. Classified as application.",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
+    "archetype_justification": "No message-queue consumers and no multi-service orchestration; the program owns persistent state (indexed EMPMAST dataset plus DB2 per README) and performs writes (PAY-FILE output, FTP push) with real calculation logic rather than read-only paginated queries.",
     "agent_scope": "write-enabled",
     "agent_scope_source": "inferred",
-    "priority": null,
-    "tags": null,
-    "context": null,
-    "tech_stack": {
-      "language": "COBOL",
-      "loc": 65,
-      "framework": "Enterprise COBOL 4.2 / JCL",
-      "architecture": "Mainframe batch (z/OS) with EC2 file gateway"
-    },
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_http_rpc_surface": false,
       "has_auth_surface": false,
       "has_write_operations": true,
       "has_logging_of_user_data": false
-    }
+    },
+    "tech_stack": {
+      "language": "COBOL (Enterprise COBOL 4.2), JCL",
+      "loc": 80,
+      "framework": "None \u2014 z/OS batch (CA-7 scheduled), IBM DB2 for z/OS v10",
+      "architecture": "Mainframe batch monolith with nightly plain-FTP file exchange to an EC2 file gateway"
+    },
+    "counts_note": "All 43 rubric questions accounted for: 40 findings + 3 evaluations."
   },
   "classification": {
     "tier": "Not Agent-Integrable",
     "sub_qualifier": null,
     "blocker_count": 7,
     "risk_safety_count": 11,
-    "risk_quality_count": 9,
+    "risk_quality_count": 10,
     "info_count": 12,
-    "high_count": 7,
-    "medium_count": 20,
+    "high_count": 18,
+    "medium_count": 10,
     "low_count": 12,
     "rule_matched": "\u22653 BLOCKER \u2192 Not Agent-Integrable"
   },
   "counts": {
-    "total": 39,
-    "high": 7,
-    "medium": 20,
-    "low": 12
+    "total": 40,
+    "high": 18,
+    "medium": 10,
+    "low": 12,
+    "blocker": 7,
+    "risk_safety": 11,
+    "risk_quality": 10,
+    "info": 12,
+    "na": 0,
+    "not_evaluated_extended": 1,
+    "pass": 2
   },
   "findings": [
     {
@@ -52,21 +59,27 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No API Interface \u2014 Batch File Exchange Only",
-      "description": "The application exposes no REST, GraphQL, or AsyncAPI interface. All integration is via fixed-width flat files transferred over plaintext FTP between the z/OS mainframe and an EC2 gateway.",
-      "gap": "No machine-callable API exists. Integration requires direct file-system access to mainframe datasets or FTP file pickup on the EC2 gateway.",
-      "recommendation": "Design a REST API wrapper exposing payroll operations as documented endpoints with OpenAPI specification.",
+      "title": "Documented API Interface",
+      "description": "The system exposes no REST, GraphQL, gRPC or AsyncAPI interface. The only integration surfaces are (a) direct VSAM/DB2 dataset access (`SELECT EMP-FILE ASSIGN TO EMPMAST`, `src/PAYRUN.cbl` lines 13-17) and (b) nightly plain-FTP transfer of a fixed-width flat file to an EC2 gateway (`jcl/PAYRUN.jcl` lines 14-21). README confirms: 'Integration: Nightly FTP of fixed-width files to/from EC2 gateway'. Searched for Express/Flask/Spring/gin route patterns, OpenAPI/Swagger/GraphQL/Smithy files and RPA scripts across all 4 repository files \u2014 zero results.",
+      "gap": "No callable, documented programmatic interface exists for an agent to bind a tool to. Integration today requires dataset-level access or file drops, which are non-auditable, batch-latency-bound, and brittle.",
+      "recommendation": "Expose payroll read and calculation operations through an API facade (z/OS Connect EE, or an API Gateway + Lambda service in front of the EC2 gateway) with an OpenAPI contract, before attempting any agent integration.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
       "evidence": {
-        "file": "jcl/PAYRUN.jcl",
-        "lines": "14-21"
+        "file": "src/PAYRUN.cbl",
+        "lines": "13-17"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
-        "safety_impact": true
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Expose payroll read and calculation operations through an API facade (z/OS Connect EE, or an API Gateway + Lambda service in front of the EC2 gateway) with an OpenAPI contract, before attempting any agent integration.",
+          "target_state": "Expose payroll read and calculation operations through an API facade (z/OS Connect EE, or an API Gateway + Lambda service in front of the EC2 gateway) with an OpenAPI contract, before attempting any agent integration.",
+          "estimated_effort": "High",
+          "dependencies": []
+        }
       }
     },
     {
@@ -74,24 +87,33 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Idempotency Controls on Write Operations",
-      "description": "The batch payroll process writes output sequentially with no idempotency controls. Re-execution produces duplicate output via new GDG generation.",
-      "gap": "No idempotency keys, no deduplication checks, no conditional write logic.",
-      "recommendation": "Add a pay-period/cycle-number check to prevent duplicate execution for the same pay period.",
+      "title": "Idempotent Write Operations",
+      "description": "No idempotency mechanism exists. `PROCESS-EMP` (`src/PAYRUN.cbl` lines 44-56) unconditionally recomputes and `WRITE`s a pay record per employee, and the JCL allocates a new GDG generation each execution (`PAYOUT DD DSN=ACME.PAYROLL.PAYOUT(+1),DISP=(NEW,CATLG,DELETE)`). There is no run key, no idempotency token, no duplicate-run detection, and `STEP020` re-FTPs `ACME.PAYROLL.PAYOUT` unconditionally.",
+      "gap": "A retried or duplicated invocation produces a second payout file and a second plaintext FTP push, with no business key preventing duplicate payment for the same pay period.",
+      "recommendation": "Introduce a pay-period run key (period id + sequence) persisted and checked before processing, and make the FTP/publish step conditional on that key so re-execution is a no-op rather than a duplicate payout.",
       "severity": "High",
       "priority": "P1",
-      "effort": "Medium",
+      "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "jcl/PAYRUN.jcl",
-        "lines": "8-12"
+        "lines": "5-13"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND batch writes have no idempotency protection.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled and no idempotency key or duplicate-run guard exists on the payout write path.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "The system performs write operations (payroll output generation, FTP transfer) that would produce duplicates if triggered multiple times for the same pay period."
+        "resolution_reasoning": "has_write_operations=true (the program writes PAYOUT and FTPs it), so API-Q4 resolves at its write-enabled severity. A retried agent invocation would duplicate payroll disbursement records.",
+        "blocker_remediation": {
+          "immediate": "Introduce a pay-period run key (period id + sequence) persisted and checked before processing, and make the FTP/publish step conditional on that key so re-execution is a no-op rather than a duplicate payout.",
+          "target_state": "Introduce a pay-period run key (period id + sequence) persisted and checked before processing, and make the FTP/publish step conditional on that key so re-execution is a no-op rather than a duplicate payout.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "API-Q1",
+            "STATE-Q1"
+          ]
+        }
       }
     },
     {
@@ -99,21 +121,27 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Machine Identity Authentication",
-      "description": "No machine identity authentication exists. The only credential is a hardcoded plaintext FTP username/password in JCL with no caller attribution.",
-      "gap": "No mechanism for an agent to authenticate with a unique, attributable machine identity.",
-      "recommendation": "Deploy centralized identity provider with per-agent service accounts. Replace FTP with SFTP using IAM-attributed credentials.",
+      "title": "Machine Identity Authentication",
+      "description": "No machine identity mechanism of any kind. The only authentication artifact in the repository is a shared static FTP userid and password embedded in JCL: `payroll PayR0ll2003!` (`jcl/PAYRUN.jcl` line 18). Job identity is the submitting human user (`NOTIFY=&SYSUID`). Searched for OAuth2 client-credentials, mTLS, API keys with principal attribution, Cognito app clients and API Gateway authorizers \u2014 none present.",
+      "gap": "There is no way to issue a distinct machine/agent principal, and no principal attribution available to downstream authorization or audit. Every invocation looks like the same shared `payroll` account or the submitting RACF user.",
+      "recommendation": "Provision a distinct machine identity per agent (IAM role or OAuth2 client-credentials client at the API facade, RACF/ACF2 surrogate id on the mainframe side) and carry the principal through to DB2/dataset access.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "jcl/PAYRUN.jcl",
-        "lines": "16-17"
+        "lines": "18"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
-        "safety_impact": true
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Provision a distinct machine identity per agent (IAM role or OAuth2 client-credentials client at the API facade, RACF/ACF2 surrogate id on the mainframe side) and carry the principal through to DB2/dataset access.",
+          "target_state": "Provision a distinct machine identity per agent (IAM role or OAuth2 client-credentials client at the API facade, RACF/ACF2 surrogate id on the mainframe side) and carry the principal through to DB2/dataset access.",
+          "estimated_effort": "High",
+          "dependencies": []
+        }
       }
     },
     {
@@ -121,24 +149,32 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Immutable Audit Logging",
-      "description": "No audit logging exists. No CloudTrail, no immutable log storage, no principal attribution for write operations.",
-      "gap": "Write operations leave no tamper-evident audit trail. Cannot prove compliance or conduct forensics.",
-      "recommendation": "Enable CloudTrail for EC2 gateway. Implement structured audit logging with caller identity. Store logs in S3 with Object Lock.",
+      "title": "Immutable Audit Logging",
+      "description": "No audit logging of the authenticated principal for write operations. The program emits only `SYSOUT DD SYSOUT=*` (`jcl/PAYRUN.jcl` line 13) \u2014 unstructured spool output with no principal field. There is no CloudTrail, no S3 Object Lock, no log retention or tamper-evidence configuration anywhere in the repository (no IaC files exist at all).",
+      "gap": "Payroll disbursement writes (PAYOUT generation and FTP push) produce no immutable, attributable audit record. Agent-initiated actions could not be distinguished from human-initiated runs, nor proven for SOX purposes.",
+      "recommendation": "Emit a structured per-run audit record (principal, run key, record count, totals, timestamp) to an append-only store (SMF offload or S3 with Object Lock) and attribute it to the machine identity from AUTH-Q1.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "jcl/PAYRUN.jcl",
-        "lines": null
+        "lines": "13"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging exists.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled and no immutable, principal-attributed audit trail exists for the payout write path.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agents executing payroll operations must have full audit attribution for compliance (SOX, financial controls)."
+        "resolution_reasoning": "has_write_operations=true, so AUTH-Q6 resolves at its write-enabled severity rather than the read-only RISK-SAFETY severity. Payroll is SOX-relevant, making an unattributable write trail a compliance exposure.",
+        "blocker_remediation": {
+          "immediate": "Emit a structured per-run audit record (principal, run key, record count, totals, timestamp) to an append-only store (SMF offload or S3 with Object Lock) and attribute it to the machine identity from AUTH-Q1.",
+          "target_state": "Emit a structured per-run audit record (principal, run key, record count, totals, timestamp) to an append-only store (SMF offload or S3 with Object Lock) and attribute it to the machine identity from AUTH-Q1.",
+          "estimated_effort": "Medium",
+          "dependencies": [
+            "AUTH-Q1"
+          ]
+        }
       }
     },
     {
@@ -146,24 +182,32 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No Compensation or Rollback Capability",
-      "description": "No compensation or rollback capability exists. Sequential batch processing with no checkpoint/restart logic.",
-      "gap": "No saga pattern, no compensating transactions, no undo endpoints, no checkpoint/restart.",
-      "recommendation": "Implement checkpoint/restart logic and multi-step compensation for the batch workflow.",
+      "title": "Compensation and Rollback",
+      "description": "No compensation or rollback. `MAIN-PARA` (`src/PAYRUN.cbl` lines 36-43) opens the files, loops to EOF and `STOP RUN`s; there is no file-status checking, no checkpoint/restart, no undo of records already written, and no coordination between `STEP010` (compute/write) and `STEP020` (FTP push) in `jcl/PAYRUN.jcl`. An abend after partial processing leaves a partial PAYOUT generation catalogued, and a failure after FTP leaves the gateway holding a partial file.",
+      "gap": "The two-step write sequence (compute+write, then transmit) has no compensating action. Partial state is neither detected nor reversible.",
+      "recommendation": "Add checkpoint/restart (or a staging dataset promoted only on clean completion), explicit FILE STATUS handling in the COBOL, and make STEP020 conditional (`COND`/`IF`) on STEP010 completion so a failed run cannot publish partial payroll.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "src/PAYRUN.cbl",
-        "lines": "42-57"
+        "lines": "36-43"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no rollback exists for multi-step batch operations.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled and the multi-step write sequence has no rollback or compensating transaction.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "The batch performs sequential write operations (calculate, write file, FTP transfer) that cannot be undone if a step fails mid-sequence."
+        "resolution_reasoning": "has_write_operations=true and the job is a genuine multi-step write workflow (compute/write then transmit), so STATE-Q1 resolves at its write-enabled severity.",
+        "blocker_remediation": {
+          "immediate": "Add checkpoint/restart (or a staging dataset promoted only on clean completion), explicit FILE STATUS handling in the COBOL, and make STEP020 conditional (`COND`/`IF`) on STEP010 completion so a failed run cannot publish partial payroll.",
+          "target_state": "Add checkpoint/restart (or a staging dataset promoted only on clean completion), explicit FILE STATUS handling in the COBOL, and make STEP020 conditional (`COND`/`IF`) on STEP010 completion so a failed run cannot publish partial payroll.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "API-Q4"
+          ]
+        }
       }
     },
     {
@@ -171,40 +215,49 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "Sensitive Data Unscoped in Agent-Facing Output",
-      "description": "System processes SSNs and bank accounts. All sensitive data output unscoped in flat files. No access control differentiation.",
-      "gap": "B1: Sensitive fields in output without filtering. B2: No access differentiation. B3: No classification metadata.",
-      "recommendation": "Implement field-level filtering. Create separately-authorized endpoints for sensitive data access.",
+      "title": "Sensitive Data Classification",
+      "description": "Stage A = Yes: the employee master record holds `EMP-SSN PIC 9(09)` and `EMP-ACCT PIC X(17)` (bank account) alongside name, rate and hours (`src/PAYRUN.cbl` lines 21-27), and README lists 'Plaintext FTP of SSN and bank account data' as a known issue. Stage B1 fires: there is no field scoping of any kind \u2014 `STEP020` transmits the whole `ACME.PAYROLL.PAYOUT` dataset over plain FTP, and any consumer reading `EMPMAST` receives the full record including SSN and account number. Stage B2 fires: access is dataset-level with `DISP=SHR` and a single shared `payroll` credential \u2014 no differentiation between sensitive and non-sensitive access. Stage B3: no classification tags, field annotations, or Macie-equivalent tooling exist.",
+      "gap": "Sensitive fields (SSN, bank account) are not excluded from, or separately authorized within, the data a consumer or agent would retrieve. One credential grants everything.",
+      "recommendation": "Define a scoped projection for agent consumption that omits SSN and account number (separate, separately-authorized endpoint for the disbursement path only), and add field-level classification annotations to the record layout and its API representation.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "src/PAYRUN.cbl",
-        "lines": "25-27"
+        "lines": "21-27"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND B1 fires \u2014 sensitive fields (SSN, bank accounts) output unscoped.",
+        "conditional_resolution": "Resolved to BLOCKER: Stage A=Yes (SSN and bank account persisted), B1 fires under agent_scope=write-enabled because no response/field scoping exists.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "Agent-facing output contains SSN and bank account numbers without any field-level filtering or scoping. B1 fires at BLOCKER severity under write-enabled scope.",
+        "resolution_reasoning": "has_persistent_data_store=true with PII and financial instruments in EMP-RECORD; no serialization exclusion, projection, or separately-scoped access path exists, so B1 fires at its write-enabled BLOCKER severity.",
         "data_q1_subchecks": {
           "b1": {
             "fired": true,
             "severity": "BLOCKER",
-            "reasoning": "EMP-SSN and EMP-ACCT included in unfiltered output records accessible via FTP."
+            "reasoning": "No field exclusion or projection: EMPMAST consumers and the FTP push both carry EMP-SSN and EMP-ACCT in full (src/PAYRUN.cbl lines 25-26, jcl/PAYRUN.jcl lines 14-21)."
           },
           "b2": {
             "fired": true,
             "severity": "RISK-SAFETY",
-            "reasoning": "Single FTP credential grants access to all data \u2014 no scope differentiation."
+            "reasoning": "Access is dataset-level via DISP=SHR plus one shared 'payroll' FTP credential; no scope, role, or column-level differentiation between sensitive and non-sensitive data."
           },
           "b3": {
             "fired": true,
             "severity": "INFO",
-            "reasoning": "No formal data classification metadata exists."
+            "reasoning": "No classification tags, field-level sensitivity annotations, data catalog entries, or PII detection tooling present in any of the 4 repository files."
           }
+        },
+        "blocker_remediation": {
+          "immediate": "Define a scoped projection for agent consumption that omits SSN and account number (separate, separately-authorized endpoint for the disbursement path only), and add field-level classification annotations to the record layout and its API representation.",
+          "target_state": "Define a scoped projection for agent consumption that omits SSN and account number (separate, separately-authorized endpoint for the disbursement path only), and add field-level classification annotations to the record layout and its API representation.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "AUTH-Q1",
+            "AUTH-Q2"
+          ]
         }
       }
     },
@@ -213,10 +266,10 @@
       "category": "Data Accessibility",
       "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No Data Residency Controls \u2014 Plaintext FTP of PII",
-      "description": "SSNs and bank accounts transmitted via plaintext FTP to EC2 with no encryption in transit, no residency controls, no sovereignty policies.",
-      "gap": "No data residency enforcement, no encryption in transit, no cross-region movement controls.",
-      "recommendation": "Replace FTP with SFTP or AWS Transfer Family. Implement region-pinning controls and data classification policies.",
+      "title": "Data Residency and Sovereignty",
+      "description": "Payroll data containing SSN and bank account numbers is transmitted unencrypted across a trust boundary to an EC2-hosted gateway at a hardcoded private IP (`open 10.0.7.40`, `ascii`, `put 'ACME.PAYROLL.PAYOUT' /incoming/payout.dat`, `jcl/PAYRUN.jcl` lines 14-21). No residency, sovereignty, region-pinning or cross-region replication control appears anywhere in the repository, and no GDPR/LGPD/jurisdictional statement exists in `README.md` \u2014 the only compliance-adjacent note is that the plaintext FTP of SSN and bank data is a known issue.",
+      "gap": "There is no declared or enforced boundary for where this regulated payroll data may travel, and no encryption in transit on the one hop that does cross a boundary. Nothing would prevent an agent from relaying the data to an out-of-jurisdiction endpoint.",
+      "recommendation": "Classify the payroll dataset's residency constraints explicitly, replace plain FTP with an encrypted, region-pinned transfer (SFTP/TLS to an in-region endpoint), and record the permitted-destination policy as enforceable configuration.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -228,9 +281,17 @@
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND PII transmitted without encryption or residency controls.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled, has_persistent_data_store=true, and no residency control or in-transit protection exists on the cross-boundary hop.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "SSN and bank account data transmitted via plaintext FTP \u2014 no technical controls prevent cross-region data movement to LLM providers."
+        "resolution_reasoning": "The surface-flag downgrade does not apply (has_persistent_data_store=true), so DATA-Q2 resolves at its write-enabled BLOCKER severity. Regulated payroll PII leaves the mainframe boundary in cleartext with no declared jurisdiction policy.",
+        "blocker_remediation": {
+          "immediate": "Classify the payroll dataset's residency constraints explicitly, replace plain FTP with an encrypted, region-pinned transfer (SFTP/TLS to an in-region endpoint), and record the permitted-destination policy as enforceable configuration.",
+          "target_state": "Classify the payroll dataset's residency constraints explicitly, replace plain FTP with an encrypted, region-pinned transfer (SFTP/TLS to an in-region endpoint), and record the permitted-destination policy as enforceable configuration.",
+          "estimated_effort": "Medium",
+          "dependencies": [
+            "DATA-Q1"
+          ]
+        }
       }
     },
     {
@@ -238,25 +299,25 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Scoped Permissions Model",
-      "description": "No authorization model supports scoped permissions. Single shared FTP credential grants unrestricted access.",
-      "gap": "No mechanism to scope agent permissions to specific resources or actions.",
-      "recommendation": "Implement IAM roles with least-privilege policies for any agent-facing surface.",
-      "severity": "Medium",
+      "title": "Scoped Permissions (Least Privilege)",
+      "description": "Authorization is entirely coarse-grained. The job runs with `REGION=0M` (unbounded storage) under the submitter's identity, datasets are shared with `DISP=SHR` (`jcl/PAYRUN.jcl` lines 1-7), and the one credential present (`payroll`) is a single shared account used for the whole transfer. No IAM policies, RACF profile definitions, scopes, or any other mechanism for differentiating access levels exist in the repository.",
+      "gap": "There is no mechanism to grant a caller read-only access to a subset of payroll data. Any identity that can run or read this job inherits the full surface.",
+      "recommendation": "Define scoped profiles per capability (read-employee-summary vs. generate-payout vs. transmit) as RACF dataset profiles and, at the future API facade, IAM/OAuth scopes bound to the machine identity.",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "jcl/PAYRUN.jcl",
-        "lines": "16-17"
+        "lines": "1-7"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
+        "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Restrict network access via security groups",
-          "Implement API layer with IAM scoped permissions"
+          "Restrict the batch surface to a single operator-controlled submission path and keep the agent out of the mainframe boundary entirely during pilot.",
+          "Front payroll reads with a narrow read-only service account whose RACF profile grants only the summary dataset."
         ]
       }
     },
@@ -265,25 +326,25 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Action-Level Authorization",
-      "description": "No action-level authorization exists. No differentiation between read/write/delete permissions.",
-      "gap": "No ABAC, no fine-grained RBAC, no permission matrices.",
-      "recommendation": "Implement action-level authorization when building the API surface.",
-      "severity": "Medium",
+      "title": "Action-Level Authorization",
+      "description": "No action-level authorization. There are no permission checks in `src/PAYRUN.cbl` \u2014 the program unconditionally opens `EMP-FILE` for input and `PAY-FILE` for output (lines 37-38) with authority derived solely from the batch job's identity. No `canRead`/`canWrite` equivalents, ABAC policies, or method-level authorization exist anywhere (no middleware, no IaC, no API layer).",
+      "gap": "Read and write authority are inseparable: anything permitted to invoke the payroll calculation is permitted to generate and transmit a payout. An agent restricted to reads cannot be enforced technically.",
+      "recommendation": "Split the read path from the write path into separately authorized operations at the API facade and bind distinct RACF/IAM permissions to each, so read-only agent scope is enforceable rather than declarative.",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "jcl/PAYRUN.jcl",
-        "lines": null
+        "file": "src/PAYRUN.cbl",
+        "lines": "36-43"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
+        "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "API Gateway with method-level authorization",
-          "IAM policies with explicit action-level allow/deny"
+          "Deploy an agent against a read-only replica/extract so write authority is physically unavailable.",
+          "Require an operator to perform the transmit step manually during pilot."
         ]
       }
     },
@@ -292,25 +353,25 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Identity Propagation or Delegation",
-      "description": "No identity propagation. No JWT, no OAuth flows, no caller context. Cannot distinguish agent-as-self from agent-on-behalf-of-user.",
-      "gap": "No mechanism to propagate caller identity through operations.",
-      "recommendation": "Design token-based identity propagation into the API modernization plan.",
-      "severity": "Medium",
+      "title": "Identity Propagation and Delegation",
+      "description": "No identity propagation or delegation. The only identity in the pipeline is `NOTIFY=&SYSUID` (the submitting user, `jcl/PAYRUN.jcl` line 1) for notification purposes and the shared `payroll` FTP account for the transfer hop (line 18). No JWT parsing, token exchange, on-behalf-of flow, or user-context header exists, and the COBOL program receives no caller context at all.",
+      "gap": "The system cannot distinguish an agent acting as itself from an agent acting on behalf of a specific user, and no caller identity survives the FTP hop to the EC2 gateway \u2014 the gateway sees only the shared account.",
+      "recommendation": "Carry a propagated principal (and, where applicable, an on-behalf-of subject) from the API facade through to the batch invocation and the gateway hop, and record both actor and subject distinctly.",
+      "severity": "High",
       "priority": "P2",
       "effort": "High",
       "phase": 2,
       "evidence": {
         "file": "jcl/PAYRUN.jcl",
-        "lines": null
+        "lines": "1-18"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "90\u2013120 days",
+        "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Log triggering identity externally",
-          "Implement token-based identity in new API wrapper"
+          "Restrict pilot agents to agent-as-self identity only; prohibit on-behalf-of payroll workflows until propagation exists.",
+          "Record the requesting human in the invocation payload and reconcile it against the operator log out of band."
         ]
       }
     },
@@ -319,25 +380,25 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "Hardcoded Plaintext Credentials",
-      "description": "FTP credentials hardcoded in plaintext in JCL: username payroll, password PayR0ll2003!. No secrets management, no rotation.",
-      "gap": "Credentials embedded in source code. No Secrets Manager, no Vault, no rotation.",
-      "recommendation": "Migrate credentials to AWS Secrets Manager. Replace FTP with SFTP using IAM-based authentication.",
-      "severity": "Medium",
+      "title": "Credential Management",
+      "description": "A production credential is hardcoded in version-controlled source: `payroll PayR0ll2003!` in the inline FTP input of `STEP020` (`jcl/PAYRUN.jcl` line 18). The JCL comment states 'DATASET NAMES AND DB2 CREDS HARDCODED - SEE OPS RUNBOOK' (line 4) and README lists 'Hardcoded dataset names and credentials in JCL' as a known issue. No Secrets Manager, Vault, or any secrets-management reference exists; the password's embedded year suggests it has not rotated since 2003.",
+      "gap": "A long-lived plaintext credential for the payroll transfer account is readable by anyone with repository access and is present in git history. No rotation mechanism exists.",
+      "recommendation": "Rotate the `payroll` account credential immediately, move it to AWS Secrets Manager (or the mainframe equivalent) with scheduled rotation, and retrieve it at run time rather than embedding it in JCL. Treat the current value as compromised and purge it from history.",
+      "severity": "High",
       "priority": "P2",
-      "effort": "Low",
-      "phase": 1,
+      "effort": "Medium",
+      "phase": 2,
       "evidence": {
         "file": "jcl/PAYRUN.jcl",
-        "lines": "16-17"
+        "lines": "18"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
         "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Move credentials to RACF or Secrets Manager",
-          "Restrict repository access"
+          "Rotate the credential immediately and restrict repository access while the secrets-manager migration is in flight.",
+          "Network-restrict the gateway so the credential is only usable from the mainframe source address."
         ]
       }
     },
@@ -346,25 +407,25 @@
       "category": "Authentication & Authorization",
       "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Agent Identity Suspension Mechanism",
-      "description": "No mechanism to suspend individual agent identities. Single shared credential with no per-agent revocation.",
-      "gap": "Cannot isolate a misbehaving agent without disrupting all consumers.",
-      "recommendation": "Implement per-agent identities with individual revocation capability.",
-      "severity": "Medium",
+      "title": "Agent Identity Suspension",
+      "description": "No per-identity suspension or revocation capability. There is a single shared FTP account (`jcl/PAYRUN.jcl` line 18) and no API keys, service accounts, IAM roles, or user-pool entries that could be individually disabled. Revoking access would mean disabling the one shared `payroll` account, which stops the entire payroll pipeline.",
+      "gap": "A misbehaving agent identity cannot be isolated without taking down payroll processing for everyone \u2014 there is no per-identity kill switch.",
+      "recommendation": "Issue one revocable credential/role per consuming identity and verify that disabling an individual identity leaves the batch pipeline and other consumers operational.",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "jcl/PAYRUN.jcl",
-        "lines": "16-17"
+        "lines": "18"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
+        "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Implement per-agent API keys in new API surface",
-          "Use IAM with per-agent roles"
+          "Keep a documented, tested procedure to disable the API facade's agent credential independently of the batch pipeline.",
+          "Gate agent access behind a feature flag that can be switched off without touching the shared account."
         ]
       }
     },
@@ -373,25 +434,28 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No Concurrency Controls",
-      "description": "No concurrency controls. Sequential file access with no locking. Concurrent execution produces duplicated/corrupted results.",
-      "gap": "No optimistic locking, no ETags, no version fields, no conflict detection.",
-      "recommendation": "Implement mutex/lock mechanism. Add optimistic locking in modernized API.",
-      "severity": "Medium",
+      "title": "Concurrency Controls",
+      "description": "No concurrency control. `EMP-FILE` is opened `ACCESS MODE IS SEQUENTIAL` with `DISP=SHR` on `ACME.PAYROLL.EMPMAST` (`src/PAYRUN.cbl` lines 13-17, `jcl/PAYRUN.jcl` line 7) \u2014 shared disposition with no enqueue, no record-level locking, no version field in `EMP-RECORD`, and no optimistic-concurrency token. Nothing prevents two concurrent PAYRUN executions, and both would write to their own new GDG generation from the same mutable master.",
+      "gap": "Concurrent invocations can read the employee master mid-update and produce divergent or duplicated payout files; there is no conflict detection to reject the second writer.",
+      "recommendation": "Add a run-level enqueue (dataset ENQ or a scheduler mutex) so only one payroll calculation can execute per period, and add a version/last-updated column to the employee master for optimistic concurrency at the record level.",
+      "severity": "High",
       "priority": "P1",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/PAYRUN.cbl",
-        "lines": "42-57"
+        "lines": "13-17"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
+        "conditional_resolution": "agent_scope=write-enabled \u2014 evaluated as RISK-SAFETY.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "agent_scope=write-enabled \u2014 evaluated as RISK-SAFETY.",
         "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "CA-7 schedule prevents concurrent execution",
-          "Add lock file or semaphore mechanism"
+          "Enforce single-run-at-a-time via the CA-7 schedule and prohibit ad-hoc concurrent submission during pilot.",
+          "Serialize all agent-initiated invocations through a single-threaded queue."
         ]
       }
     },
@@ -400,25 +464,25 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No Circuit Breakers or Resilience Patterns",
-      "description": "No circuit breakers, retry logic, or timeout configurations. FTP transfer has no timeout or retry on failure.",
-      "gap": "External dependency failure causes unhandled hang or crash.",
-      "recommendation": "Add timeout and retry logic for FTP transfer. Implement health-check validation before transfer.",
-      "severity": "Medium",
+      "title": "Circuit Breakers and Resilience",
+      "description": "No resilience controls on external dependencies. `READ-EMP` (`src/PAYRUN.cbl` lines 57-59) handles only `AT END` \u2014 there is no `FILE STATUS` clause, no I/O error branch, and no `INVALID KEY` handling. The FTP step (`jcl/PAYRUN.jcl` lines 15-21) runs a fixed inline script with no timeout, no retry, no return-code check and no failure path if `10.0.7.40` is unreachable. README notes DB2 v10 is out of support and the batch window overruns at 5-7 hours.",
+      "gap": "A slow or unavailable dependency (DB2, the EC2 gateway) produces an abend or a silent partial result rather than a bounded, retried, circuit-broken failure \u2014 and an agent calling in would observe no distinction.",
+      "recommendation": "Add FILE STATUS and I/O error handling to the COBOL, bounded retries with backoff and a return-code gate on the transfer step, and a timeout/circuit-breaker at the API facade that fails fast instead of queueing behind a 5-7 hour batch.",
+      "severity": "High",
       "priority": "P1",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "jcl/PAYRUN.jcl",
-        "lines": "14-21"
+        "file": "src/PAYRUN.cbl",
+        "lines": "57-59"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
         "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "JCL COND CODE checks provide basic failure detection",
-          "Add JCL TIME parameter for execution timeout"
+          "Put a timeout and fail-fast wrapper at the API facade so agents never block on the batch window or an unreachable gateway.",
+          "Alert on batch duration and gateway reachability so degradation is detected before agents cascade."
         ]
       }
     },
@@ -427,52 +491,28 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No Blast Radius or Transaction Limits",
-      "description": "No configurable limits on operations. Batch processes ALL employee records unconditionally with no maximum count or spend limits.",
-      "gap": "No per-agent transaction limits, no maximum records per run, no configurable blast radius.",
-      "recommendation": "Add configurable record count limits and dry-run mode for agent-initiated executions.",
-      "severity": "Medium",
+      "title": "Blast Radius and Transaction Limits",
+      "description": "No blast-radius or transaction limits. `PERFORM PROCESS-EMP UNTIL WS-EOF = 'Y'` (`src/PAYRUN.cbl` line 41) processes the entire employee master unconditionally \u2014 there is no maximum-records cap, no total-disbursement ceiling, no per-caller batch-size limit, and no spend threshold. `SPACE=(CYL,(50,10),RLSE)` is a storage allocation, not a business limit.",
+      "gap": "A single invocation can generate payout records for every employee with no cap on record count or total monetary value, so an erroneous agent-initiated run has unbounded financial blast radius.",
+      "recommendation": "Add configurable per-run business limits (max employees processed, max aggregate net disbursement, max variance vs. prior period) that abort the run and require explicit human override when exceeded.",
+      "severity": "High",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "src/PAYRUN.cbl",
-        "lines": "44"
+        "lines": "40-41"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Add record count validation that aborts above threshold",
-          "Implement dry-run mode"
-        ]
-      }
-    },
-    {
-      "question_id": "DATA-Q6",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No PII Redaction in Logs or Diagnostic Output",
-      "description": "No PII redaction capability. SSNs and bank accounts in working storage exposed in abend dumps. No log scrubbing or masking.",
-      "gap": "No log scrubbing, no PII masking. System abends expose PII in diagnostic output.",
-      "recommendation": "Implement PII masking in all logging and error output when building modernized interface.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/PAYRUN.cbl",
-        "lines": "25-27"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
+        "conditional_resolution": "agent_scope=write-enabled \u2014 evaluated as RISK-SAFETY.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "agent_scope=write-enabled \u2014 evaluated as RISK-SAFETY.",
         "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Restrict access to SYSOUT and dumps",
-          "Implement PII masking in new API/logging layer"
+          "Apply limits in the agent orchestration layer (max records per request, mandatory human sign-off above a monetary threshold) until system-side limits exist.",
+          "Restrict pilot scope to read and report operations with no disbursement authority."
         ]
       }
     },
@@ -481,25 +521,28 @@
       "category": "Human-in-the-Loop",
       "category_display": "Human-in-the-Loop",
       "category_id": "HITL",
-      "title": "No Draft/Pending State for Write Operations",
-      "description": "No draft or pending state. Batch runs to completion immediately with no human review step.",
-      "gap": "All write operations immediately committed. No reviewable intermediate state.",
-      "recommendation": "Introduce two-phase execution: preview/summary for review, then commit after approval.",
-      "severity": "Medium",
+      "title": "Draft/Pending State",
+      "description": "No draft or pending state. `PROCESS-EMP` writes final pay records directly (`WRITE PAY-RECORD`, `src/PAYRUN.cbl` line 55) and the output generation is immediately catalogued (`DISP=(NEW,CATLG,DELETE)`) and FTP'd to the gateway in the next step. `PAY-RECORD` is an opaque `PIC X(120)` with no status field, and there is no PENDING/DRAFT/PROPOSED state or create-then-confirm sequence anywhere.",
+      "gap": "There is no reviewable intermediate state between calculation and disbursement, so a proposed payroll run cannot be inspected and approved before it is committed and transmitted.",
+      "recommendation": "Introduce a proposed-run state: write to a staging dataset with an explicit status, and promote/transmit only on an approval action. This also provides the review point HITL-Q2 needs.",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "jcl/PAYRUN.jcl",
-        "lines": "5-12"
+        "file": "src/PAYRUN.cbl",
+        "lines": "44-56"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
+        "conditional_resolution": "agent_scope=write-enabled \u2014 evaluated as RISK-SAFETY.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "agent_scope=write-enabled \u2014 evaluated as RISK-SAFETY.",
+        "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Pre-validation summary for human review",
-          "Staging output area requiring manual promotion"
+          "Have the agent write only to a separate proposal dataset that an operator promotes manually.",
+          "Keep the agent advisory-only (produces a recommendation document, not a payout) during pilot."
         ]
       }
     },
@@ -508,25 +551,55 @@
       "category": "Human-in-the-Loop",
       "category_display": "Human-in-the-Loop",
       "category_id": "HITL",
-      "title": "No Configurable Approval Gates",
-      "description": "No configurable approval gates. CA-7 triggers automatically with no human confirmation required.",
-      "gap": "No approval mechanism for high-risk operations.",
-      "recommendation": "Add configurable approval gate for agent-initiated payroll runs using Step Functions with human approval task.",
-      "severity": "Medium",
+      "title": "Configurable Approval Gates",
+      "description": "No configurable approval gate. The pipeline is a fully automated CA-7 schedule \u2014 `jcl/PAYRUN.jcl` line 3 states 'RUNS EVERY OTHER FRIDAY VIA CA-7 SCHEDULE PAYRUN-BW' and `STEP020` transmits immediately after `STEP010` with no intervening confirmation step, approval endpoint, or operation-level flag. No approval API, no waitForTaskToken-equivalent, no manual hold is defined.",
+      "gap": "High-impact operations (generating and transmitting a payroll disbursement file) cannot be configured to require human approval at the system layer; the only control is the scheduler.",
+      "recommendation": "Add an operation-level approval flag that holds the transmit step pending explicit human release, configurable per operation type (e.g., always required for off-cycle runs or runs exceeding the STATE-Q6 limits).",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "jcl/PAYRUN.jcl",
-        "lines": "1-3"
+        "lines": "3-14"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
+        "conditional_resolution": "agent_scope=write-enabled \u2014 evaluated as RISK-SAFETY.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "agent_scope=write-enabled \u2014 evaluated as RISK-SAFETY.",
+        "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Require manual CA-7 job release for agent-triggered runs",
-          "Implement approval workflow in new API layer"
+          "Enforce approval in the orchestration layer before invoking the job, and keep CA-7 as the sole production trigger.",
+          "Require dual operator sign-off on every off-cycle run."
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "PII Redaction in Logs",
+      "description": "No PII redaction in observable output. The job writes diagnostics to `SYSOUT DD SYSOUT=*` (`jcl/PAYRUN.jcl` line 13) \u2014 unfiltered JES spool with no scrubbing layer. The processed records contain `EMP-SSN` and `EMP-ACCT` (`src/PAYRUN.cbl` lines 25-26), and any abend dump or diagnostic trace of the record area would expose them verbatim. No log-scrubbing middleware, masking utility, CloudWatch filter, or Macie-equivalent exists in the repository.",
+      "gap": "Employee SSNs and bank account numbers sit in the working record area with no masking policy, so abend dumps and spool output are an uncontrolled PII egress path.",
+      "recommendation": "Mask SSN and account fields in any diagnostic output, route spool to a retention-bounded, access-controlled destination, and add a redaction filter before logs reach any downstream observability system.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "13"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Restrict spool and dump access to the payroll operations group and set short retention while redaction is implemented.",
+          "Prohibit forwarding of JES spool into any shared observability platform until a redaction filter exists."
         ]
       }
     },
@@ -535,10 +608,10 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Async Support for Long-Running Batch (5-7 Hours)",
-      "description": "5-7 hour batch with no async patterns \u2014 no job submission API, no polling, no callbacks.",
-      "gap": "No asynchronous operation support for a long-running process.",
-      "recommendation": "Implement job submission with status polling endpoint. Consider Step Functions for batch lifecycle.",
+      "title": "Asynchronous Operation Support",
+      "description": "No asynchronous invocation pattern, despite operations far exceeding any synchronous budget: README states the batch 'runs 5-7 hours and sometimes overruns'. Execution is a scheduled CA-7 job (`jcl/PAYRUN.jcl` line 3) with no job-submission API, no status/polling endpoint, and no webhook callback. Completion is signalled only by `NOTIFY=&SYSUID` (line 1) and the appearance of a new GDG generation.",
+      "gap": "An agent has no way to submit work, obtain a job handle, poll status, or receive a completion callback for a multi-hour operation.",
+      "recommendation": "Expose a submit/poll/callback trio at the API facade (job id on submit, status endpoint, optional webhook on completion) wrapping the CA-7 job, so agents never hold a synchronous connection against the batch window.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -552,8 +625,8 @@
         "safety_impact": false,
         "remediation_timeline": "60\u201390 days",
         "compensating_controls": [
-          "Monitor JCL job completion via z/OS events",
-          "Implement status file on EC2 gateway"
+          "Have the orchestration layer treat payroll operations as fire-and-check-later with its own job tracking.",
+          "Limit pilot agents to reading completed prior-period outputs rather than triggering runs."
         ]
       }
     },
@@ -562,106 +635,52 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No Queryable State Interface",
-      "description": "No queryable interface. Employee and payroll state locked in DB2 and z/OS datasets with no API access.",
-      "gap": "Agent cannot inspect state before taking action.",
-      "recommendation": "Build read-only API for querying employee payroll state.",
+      "title": "Queryable Current State",
+      "description": "Current state is not queryable. `EMP-FILE` is read `ACCESS MODE IS SEQUENTIAL` from end to end (`src/PAYRUN.cbl` lines 13-17) even though the dataset is INDEXED, and the output is an opaque fixed-width `PAY-RECORD PIC X(120)` (line 29). There is no status field, no state machine, and no query interface \u2014 inspecting current payroll state requires reading a flat file or the DB2 tables directly.",
+      "gap": "An agent cannot inspect employee or pay-run state before acting; it would have to parse a 120-byte fixed-width file or obtain direct database access.",
+      "recommendation": "Expose read endpoints for employee and pay-run state (including run status and per-period totals) so an agent can read before acting instead of parsing batch output.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "src/PAYRUN.cbl",
-        "lines": "12-15"
+        "lines": "28-29"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
         "remediation_timeline": "60\u201390 days",
         "compensating_controls": [
-          "Expose read-only query on EC2 gateway for recent output",
-          "Implement DB2 query API"
+          "Publish a periodic state extract the agent can read instead of querying live state.",
+          "Have the orchestration layer cache last-known run status from operator notifications."
         ]
       }
     },
     {
-      "question_id": "DATA-Q4",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No Input Validation or Schema Enforcement",
-      "description": "No input validation at API boundary. COBOL reads fixed-format records without validation. Malformed records processed silently.",
-      "gap": "No validation, no schema enforcement, no structured error responses for invalid input.",
-      "recommendation": "Implement request validation with structured error responses in the new API. Add pre-execution data quality checks.",
+      "question_id": "STATE-Q7",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Graceful Degradation Signaling",
+      "description": "No degradation signalling. The program's only state variable for control flow is `WS-EOF` (`src/PAYRUN.cbl` line 35); there is no health surface, no freshness or staleness indicator, and no partial-result marker. Critically, README documents that the state tax table lookup 'REMOVED IN 2011, DONE MANUALLY' (`src/PAYRUN.cbl` line 50) and tax tables are 'updated by hand each January' \u2014 the system is permanently running in a functionally degraded mode that it does not advertise.",
+      "gap": "Consumers receive net-pay figures that silently omit state tax and may be based on stale hand-maintained tax tables, with no machine-readable signal that the result is partial.",
+      "recommendation": "Emit an explicit completeness/freshness indicator with every result (e.g., tax-table effective date, `state_tax_applied: false`) so an agent can detect degraded output and defer to human review.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "src/PAYRUN.cbl",
-        "lines": "55-56"
+        "lines": "50"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
+        "remediation_timeline": "60\u201390 days",
         "compensating_controls": [
-          "Pre-processing validation of master file",
-          "Input validation in new API wrapper"
-        ]
-      }
-    },
-    {
-      "question_id": "DATA-Q5",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No Temporal Metadata in Output",
-      "description": "No timestamps in output records. No freshness signals. Agent cannot determine data currency.",
-      "gap": "No temporal metadata, no freshness indicators, no timezone handling.",
-      "recommendation": "Add processing timestamps and pay period dates to all output.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "src/PAYRUN.cbl",
-        "lines": "48-52"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Use GDG generation number as proxy temporal metadata",
-          "Add header/trailer record with timestamp"
-        ]
-      }
-    },
-    {
-      "question_id": "DISC-Q1",
-      "category": "Discovery & Documentation",
-      "category_display": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "No Schema Versioning or API Contracts",
-      "description": "No schema versioning. Fixed-width format defined implicitly by COBOL with no formal schema, no versioning, no changelog.",
-      "gap": "No schema documentation, no versioning, no breaking change detection.",
-      "recommendation": "Document record layout formally. Add version identifier. Implement contract tests.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "src/PAYRUN.cbl",
-        "lines": "17-27"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Document current record layout as formal schema",
-          "Add header record with format version"
+          "Document the known-incomplete calculation (no state tax, manual tax tables) in the agent's tool description so it never presents net pay as authoritative.",
+          "Require human review of any agent output derived from net-pay figures."
         ]
       }
     },
@@ -670,10 +689,10 @@
       "category": "Human-in-the-Loop",
       "category_display": "Human-in-the-Loop",
       "category_id": "HITL",
-      "title": "No Sandbox/Staging Environment",
-      "description": "No dedicated sandbox. Changes validated in shared QA region only. No isolation for agent testing.",
-      "gap": "No isolated test environment for agent behavior validation.",
-      "recommendation": "Establish dedicated sandbox with synthetic payroll data (no real PII).",
+      "title": "Sandbox/Staging Environment",
+      "description": "There is no environment definition in the repository \u2014 no docker-compose, no environment-specific configuration, no seed or synthetic data generator, and no IaC. Dataset names are hardcoded to production-looking qualifiers (`ACME.PAYROLL.EMPMAST`, `ACME.PAYROLL.PAYOUT`) in `jcl/PAYRUN.jcl` lines 6-8, and README states changes are 'validated in a shared QA region only' with 'No automated tests'.",
+      "gap": "A shared QA region with no committed configuration and no production-shaped synthetic data is not a safe, reproducible place to exercise agent behaviour, and promotion requires hand-editing hardcoded dataset names.",
+      "recommendation": "Parameterize dataset qualifiers by environment (symbolic parameters), and stand up an isolated sandbox region seeded with synthetic employee data that matches the production record layout.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -687,62 +706,89 @@
         "safety_impact": false,
         "remediation_timeline": "60\u201390 days",
         "compensating_controls": [
-          "Restrict agent testing to shared QA with monitoring",
-          "Create minimal test dataset"
+          "Exercise agent behaviour against a frozen copy of a prior-period output file rather than the QA region.",
+          "Schedule agent testing in the QA region in exclusive windows to avoid shared-region interference."
         ]
       }
     },
     {
-      "question_id": "ENG-Q4",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "Zero Automated Test Coverage",
-      "description": "No automated tests. README states 'No automated tests.' No test files, no CI pipeline.",
-      "gap": "Zero test coverage. No regression detection.",
-      "recommendation": "Create test baseline with golden file comparisons. Build automated tests.",
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Input Validation and Schema Enforcement",
+      "description": "No input validation. `PROCESS-EMP` computes directly from the input record (`COMPUTE WS-GROSS = EMP-RATE * EMP-HOURS`, `src/PAYRUN.cbl` lines 45-47) with no range, sanity, or completeness checks, and `READ-EMP` (lines 57-59) has no `FILE STATUS` or `INVALID KEY` handling. The `PIC` clauses provide implicit truncation only \u2014 `WS-GROSS PIC 9(07)V99` will silently truncate an overflowing product rather than reject it, and there is no structured rejection path or error record. No validation library or request validator exists (no API layer at all).",
+      "gap": "Malformed or out-of-range input (negative/absurd hours, corrupt packed fields, truncated records) is silently computed into a payout rather than rejected with a field-level error.",
+      "recommendation": "Add explicit field validation with an ON SIZE ERROR branch and a reject-record path that identifies the failing employee id and field, and enforce schema validation at the future API boundary.",
       "severity": "Medium",
-      "priority": "P3",
+      "priority": "P2",
       "effort": "Medium",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
-        "file": "README.md",
-        "lines": null
+        "file": "src/PAYRUN.cbl",
+        "lines": "44-56"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
         "remediation_timeline": "60\u201390 days",
         "compensating_controls": [
-          "Document expected input/output pairs",
-          "Create basic test harness"
+          "Validate payloads at the orchestration layer before invoking the job.",
+          "Reconcile run totals against the prior period and halt on variance beyond a threshold."
         ]
       }
     },
     {
-      "question_id": "ENG-Q5",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "No Encryption at Rest",
-      "description": "No encryption at rest. DB2 v10 (end of support), z/OS datasets, and EC2 files store sensitive data unencrypted.",
-      "gap": "Sensitive data (SSN, bank accounts) stored without encryption. No KMS.",
-      "recommendation": "Encrypt data at rest: upgrade DB2, enable z/OS dataset encryption, ensure EC2 EBS uses KMS.",
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Temporal Metadata and Freshness",
+      "description": "No temporal metadata. `EMP-RECORD` (`src/PAYRUN.cbl` lines 20-27) has no created/updated/effective-date field, and `PAY-RECORD` carries only employee id, name and net pay via the `STRING` concatenation (lines 51-55) \u2014 no pay-period date, no run timestamp, no timezone normalization. Freshness is implicit in the GDG generation number. The FICA wage base is a hardcoded literal (`WS-WAGE-BASE ... VALUE 132900.00`, line 34) last updated in 2019 per the file header, with no effective-date field.",
+      "gap": "An agent cannot determine which pay period a record belongs to, when the underlying data was last updated, or whether the embedded tax constants are current.",
+      "recommendation": "Add pay-period and last-updated timestamps (UTC) to the record layouts and the output file, and externalize the wage base and tax tables with explicit effective dates.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
-        "lines": null
+        "file": "src/PAYRUN.cbl",
+        "lines": "20-34"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "90\u2013120 days",
+        "remediation_timeline": "60\u201390 days",
         "compensating_controls": [
-          "Ensure EC2 EBS volume uses KMS encryption",
-          "Restrict physical access to mainframe"
+          "Have the orchestration layer stamp period and retrieval time onto every extract it reads.",
+          "Pin the agent to a single named GDG generation so the period is unambiguous."
+        ]
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Schema Versioning and API Contracts",
+      "description": "No schema versioning or contract management. The interchange contract is an undocumented fixed-width layout defined only by `DCB=(RECFM=FB,LRECL=120,BLKSIZE=0)` (`jcl/PAYRUN.jcl` line 12) and the `STRING` statement that builds it (`src/PAYRUN.cbl` lines 51-55); README lists 'Fixed-width file formats with no schema/versioning' as a known issue. There are no copybooks in the repository, no JSON/Avro/Protobuf schema, no migration files, no changelog, and no CI breaking-change detection (no CI configuration exists). The source header warns 'DO NOT RECOMPILE WITHOUT CONTACTING MAINFRAME TEAM'.",
+      "gap": "Consumers reverse-engineer byte offsets from code. Any field addition or width change silently breaks every downstream parser with no version marker or detection gate.",
+      "recommendation": "Publish the record layout as a versioned, machine-readable schema (copybook plus a generated JSON Schema), add a version marker to the file, and gate changes with automated breaking-change detection in CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "9-12"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Freeze the record layout for the pilot duration and pin the agent's parser to that version.",
+          "Maintain a hand-authored copybook in the repository as the interim contract of record."
         ]
       }
     },
@@ -751,10 +797,10 @@
       "category": "Observability",
       "category_display": "Observability",
       "category_id": "OBS",
-      "title": "No Distributed Tracing or Structured Logging",
-      "description": "No tracing or structured logging. Only unstructured JCL SYSOUT. No trace IDs, no correlation IDs.",
-      "gap": "Cannot reconstruct batch execution from logs.",
-      "recommendation": "Implement OpenTelemetry tracing and structured JSON logging in modernized system.",
+      "title": "Distributed Tracing and Structured Logging",
+      "description": "No tracing and no structured logging. The sole diagnostic output is `SYSOUT DD SYSOUT=*` (`jcl/PAYRUN.jcl` line 13) \u2014 unstructured JES spool. `src/PAYRUN.cbl` contains no DISPLAY statements, no correlation or run id, and no counters. Searched for OpenTelemetry, X-Ray, `traceparent` propagation, JSON logging and `request_id`/`correlation_id` fields across all repository files \u2014 zero results.",
+      "gap": "An agent-initiated run cannot be correlated end-to-end (API facade to batch job to FTP hop), and there is no structured record of what the run did, making failures effectively undiagnosable.",
+      "recommendation": "Generate a run/correlation id at invocation, carry it through the job and the transfer step, and emit structured (JSON) run events including record counts, totals and outcome to a queryable log store.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -768,8 +814,62 @@
         "safety_impact": false,
         "remediation_timeline": "60\u201390 days",
         "compensating_controls": [
-          "Use JCL job number as basic correlation ID",
-          "Implement structured logging in new API layer"
+          "Correlate manually via run id recorded in the orchestration layer plus job number from the notification.",
+          "Retain spool for the pilot window so failures can be reconstructed by hand."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "API Test Coverage",
+      "description": "No automated tests exist. The repository contains four files (`.gitignore`, `README.md`, `jcl/PAYRUN.jcl`, `src/PAYRUN.cbl`) \u2014 there is no test directory, no unit-test harness, no integration or contract tests, and no CI configuration to run them. README states plainly: 'No automated tests; changes validated in a shared QA region only'. The source header's 'DO NOT RECOMPILE WITHOUT CONTACTING MAINFRAME TEAM' warning indicates change confidence rests on tribal knowledge.",
+      "gap": "Payroll calculation logic (gross, FICA, net) has zero regression coverage, so behaviour changes that would mislead an agent \u2014 or miscalculate pay \u2014 are caught only by manual QA inspection.",
+      "recommendation": "Add unit tests for the calculation paragraphs against fixed input/expected-output fixtures and a file-level golden-output test for the payout layout, and run both in CI on every change.",
+      "severity": "Medium",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Add golden-file regression checks for the pilot-relevant calculation paths only.",
+          "Require manual QA sign-off with a documented checklist on every change during pilot."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "Encryption at Rest for Agent-Accessible Data",
+      "description": "No encryption at rest for the payroll data stores. There is no IaC in the repository, so no `kms_key_id`, no customer-managed key, and no DB2/dataset encryption setting is declared anywhere. `ACME.PAYROLL.EMPMAST` and the `ACME.PAYROLL.PAYOUT` generations (`jcl/PAYRUN.jcl` lines 6-12) are allocated with no encryption attribute, and the transferred file lands on the EC2 gateway at `/incoming/payout.dat` (line 20) with no declared volume encryption. These datasets hold SSN and bank account data.",
+      "gap": "Payroll PII is stored on mainframe datasets and an EC2 gateway filesystem with no evidence of encryption at rest or key management.",
+      "recommendation": "Enable dataset encryption (z/OS pervasive encryption with a managed key) on EMPMAST and the PAYOUT GDG, enable EBS/KMS encryption on the gateway volume, and declare both as code so the control is auditable.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "6-12"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Verify and document existing storage-level encryption out of band; restrict dataset and gateway filesystem access in the interim.",
+          "Shorten retention of the payout file on the gateway to the minimum needed."
         ]
       }
     },
@@ -778,17 +878,17 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Machine-Readable API Specification",
-      "description": "No HTTP/RPC surface \u2014 machine-readable spec is not applicable. System operates via batch file exchange.",
-      "gap": "No API surface exists to describe with a machine-readable spec.",
-      "recommendation": "Generate OpenAPI spec as part of the API modernization effort.",
+      "title": "Machine-Readable API Specification",
+      "description": "has_http_rpc_surface=false \u2014 the system exposes no callable API surface, so there is no interface for a machine-readable specification to describe. Searched for `openapi.*`, `swagger.*`, `*.graphql`, `*.gql`, `*.smithy` and AsyncAPI files across the repository: none found. The nearest thing to a contract is the implicit 120-byte fixed-width record layout in `src/PAYRUN.cbl` lines 51-55.",
+      "gap": "Recorded as INFO per surface-flag calibration: no HTTP/RPC surface \u2014 machine-readable spec is not applicable until an API facade exists (API-Q1).",
+      "recommendation": "When the API facade from API-Q1 is built, generate its OpenAPI specification from annotations rather than maintaining it by hand.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
-        "lines": null
+        "file": "src/PAYRUN.cbl",
+        "lines": "51-55"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -800,17 +900,17 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Structured Error Responses",
-      "description": "No HTTP/RPC surface \u2014 structured error responses are not applicable. Batch signals failure via JCL return codes.",
-      "gap": "No API error responses exist.",
-      "recommendation": "Design structured error format as part of API modernization.",
+      "title": "Structured Error Responses",
+      "description": "has_http_rpc_surface=false \u2014 there are no API responses to structure. Failure signalling today is an abend plus JES return code; `READ-EMP` (`src/PAYRUN.cbl` lines 57-59) has no FILE STATUS clause, so there is no error code, message, or retryable indicator available to any caller.",
+      "gap": "Recorded as INFO per surface-flag calibration: no HTTP/RPC surface \u2014 structured error responses are not applicable until an API facade exists.",
+      "recommendation": "Design the API facade's error contract up front with an error code, message and explicit retryable flag, and back it with FILE STATUS handling in the COBOL (see DATA-Q4).",
       "severity": "Low",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "jcl/PAYRUN.jcl",
-        "lines": null
+        "file": "src/PAYRUN.cbl",
+        "lines": "57-59"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -822,17 +922,17 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "Fixed-Width Flat File Response Format",
-      "description": "Output is fixed-width 120-byte flat file records requiring positional parsing with no self-describing schema.",
-      "gap": "Non-standard format not directly consumable by agents or LLMs.",
-      "recommendation": "Implement JSON serialization in the modernized API layer.",
+      "title": "Structured Response Format",
+      "description": "The response format is a fixed-width, positional, 120-byte flat file: `PAY-RECORD PIC X(120)` (`src/PAYRUN.cbl` line 29) populated by a `STRING ... DELIMITED BY SIZE` concatenation of employee id, name and net pay (lines 51-55), allocated as `RECFM=FB,LRECL=120` (`jcl/PAYRUN.jcl` line 12) and transferred in FTP `ascii` mode. There is no JSON, XML, or self-describing binary format.",
+      "gap": "Positional fixed-width output has no field names, so every consumer (and any agent tool) needs an out-of-band byte-offset map. EBCDIC/ASCII conversion in the FTP step adds a second interpretation hazard for packed numeric fields.",
+      "recommendation": "Have the API facade emit JSON with named fields, derived from a published copybook, rather than passing the fixed-width layout through to consumers.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
       "evidence": {
         "file": "src/PAYRUN.cbl",
-        "lines": "29"
+        "lines": "28-29"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -844,17 +944,17 @@
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Event Emission Capability",
-      "description": "No event emission. No webhooks, no SNS/EventBridge, no Kafka. State changes not signaled.",
-      "gap": "State changes invisible to downstream consumers.",
-      "recommendation": "Publish events to EventBridge for payroll completion when modernizing.",
+      "title": "Event Emission for State Changes",
+      "description": "No event emission. State changes are visible only as a new catalogued GDG generation and a file landing at `/incoming/payout.dat` on the gateway (`jcl/PAYRUN.jcl` lines 9-20). There is no webhook, SNS/EventBridge/SQS integration, Kafka topic, or CDC pipeline \u2014 the only notification mechanism is `NOTIFY=&SYSUID` (line 1), which targets a human TSO user.",
+      "gap": "Agents cannot react to payroll state changes; they would have to poll for a new file generation on a biweekly cadence.",
+      "recommendation": "Publish a completion event (run id, period, record count, status) to EventBridge or SNS when the run finishes, so event-reactive consumers do not need to poll the dataset.",
       "severity": "Low",
       "priority": "P2",
-      "effort": "Medium",
-      "phase": 3,
+      "effort": "Low",
+      "phase": 2,
       "evidence": {
         "file": "jcl/PAYRUN.jcl",
-        "lines": null
+        "lines": "1-20"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -866,16 +966,82 @@
       "category": "State Management",
       "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No API-Layer Rate Limiting",
-      "description": "No HTTP/RPC surface \u2014 API-layer rate limiting is not applicable. Batch scheduled by CA-7.",
-      "gap": "No API surface to apply rate limiting.",
-      "recommendation": "Include API Gateway throttling when building agent-facing interface.",
+      "title": "Rate Limiting and Throttling",
+      "description": "has_http_rpc_surface=false \u2014 there is no API layer at which to enforce rate limits. Invocation is gated instead by the CA-7 biweekly schedule (`jcl/PAYRUN.jcl` line 3), and the job requests unbounded storage with `REGION=0M` (line 1). No API Gateway throttle, WAF rate rule, or rate-limiting middleware exists.",
+      "gap": "Recorded as INFO per surface-flag calibration: no HTTP/RPC surface \u2014 API-layer rate limiting is not applicable. Scheduler-based invocation incidentally bounds call frequency today, but that protection disappears the moment an API facade is added.",
+      "recommendation": "Add throttling at the API facade when it is introduced, sized to the batch window, and replace `REGION=0M` with a bounded region to cap a single run's resource consumption.",
       "severity": "Low",
       "priority": "P1",
       "effort": "Low",
-      "phase": 2,
+      "phase": 1,
       "evidence": {
         "file": "jcl/PAYRUN.jcl",
+        "lines": "1-3"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Data Quality Awareness",
+      "description": "No data quality measurement. There is no profiling report, null-rate monitor, duplicate detection, freshness SLA, or quality dashboard anywhere in the repository. Known quality hazards are documented but unmeasured: state tax lookup 'REMOVED IN 2011, DONE MANUALLY' (`src/PAYRUN.cbl` line 50), tax tables 'updated by hand each January' and the FICA wage base hardcoded at the 2019 value (line 34).",
+      "gap": "An agent reasoning over this payroll data has no completeness signal and would treat manually-patched, structurally incomplete net-pay figures as authoritative.",
+      "recommendation": "Instrument basic quality metrics for each run (record counts, null/zero-rate on rate and hours, period-over-period variance) and publish them alongside the run, pairing with the degradation signal in STATE-Q7.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "33-34"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Semantically Meaningful Field Names",
+      "description": "Field names are legacy COBOL abbreviations requiring a data dictionary: `EMP-ID`, `EMP-RATE`, `EMP-HOURS`, `EMP-SSN`, `EMP-ACCT` (`src/PAYRUN.cbl` lines 21-27) and working-storage names `WS-GROSS`, `WS-FICA`, `WS-FICA-RATE`, `WS-WAGE-BASE`, `WS-NET`, `WS-EOF` (lines 31-35). They are at least domain-recognizable rather than opaque codes, but the output `PAY-RECORD` is wholly positional with no field names at all, and no data dictionary file exists in the repository.",
+      "gap": "An LLM can infer most of these abbreviations (EMP-ACCT, WS-FICA) from context, so semantic readiness is moderate rather than poor \u2014 but the positional output file carries no names whatsoever and the 17-character `EMP-ACCT` has no documented format.",
+      "recommendation": "Publish a data dictionary mapping each PIC field to a semantic name, type and format, and use expanded names (employeeId, grossPay, ficaWithheld, netPay) in the API facade's JSON representation.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "20-35"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Data Catalog / Metadata Layer",
+      "description": "No data catalog or metadata layer. The repository has no Glue Catalog reference, no DataHub/Collibra/Alation entry, no metadata files and no schema documentation; `README.md` is a 24-line architecture-and-known-issues summary with no field or dataset inventory. Semantic knowledge of the DB2 tables and the EMPMAST layout lives in the ops runbook referenced from `jcl/PAYRUN.jcl` line 4 and in retired authors' tribal knowledge ('AUTHOR: R. ANDERSON (RETIRED 2014)').",
+      "gap": "Teams building agent tools against payroll have no discoverable description of what data exists or what it means, which directly slows tool definition and raises the risk of misinterpreting fields.",
+      "recommendation": "Catalog the payroll datasets and DB2 tables with field-level descriptions and sensitivity labels, starting from the record layouts in `src/PAYRUN.cbl`, and treat the catalog as the source the API facade's documentation is generated from.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "README.md",
         "lines": null
       },
       "ara_metadata": {
@@ -888,17 +1054,17 @@
       "category": "Observability",
       "category_display": "Observability",
       "category_id": "OBS",
-      "title": "No Alerting Configuration",
-      "description": "No HTTP/RPC surface \u2014 alerting on API error rates is not applicable. No CloudWatch alarms exist.",
-      "gap": "No alerting for batch failures or performance degradation.",
-      "recommendation": "Configure alerting when building the API surface.",
+      "title": "Alerting on Error Rates and Latency",
+      "description": "has_http_rpc_surface=false \u2014 there are no API error-rate or latency metrics to alert on. Operational signalling consists of `NOTIFY=&SYSUID` on job completion (`jcl/PAYRUN.jcl` line 1) and `MSGCLASS=X` spool output. No CloudWatch alarms, anomaly detection, SLO alerting or paging integration exists, despite README noting the batch 'runs 5-7 hours and sometimes overruns' its window.",
+      "gap": "Recorded as INFO per surface-flag calibration: no HTTP/RPC surface \u2014 API alerting is not applicable yet. Note that even the existing batch-overrun condition is unalerted, so degradation is discovered by downstream complaint.",
+      "recommendation": "Alert on batch duration against the window and on job abend now; add error-rate and latency alarms at the API facade when it is introduced.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
-        "file": "README.md",
-        "lines": null
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "1"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -910,17 +1076,17 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No Infrastructure as Code",
-      "description": "No HTTP/RPC and no auth surface \u2014 IaC governance for agent-facing surface not applicable. No IaC exists.",
-      "gap": "No IaC. Infrastructure managed manually.",
-      "recommendation": "Define infrastructure as code when building agent-facing components.",
+      "title": "Infrastructure Governance for Agent-Facing Surface",
+      "description": "has_http_rpc_surface=false and has_auth_surface=false \u2014 the repository defines no agent-facing integration surface to govern. There is no IaC of any kind (searched for `*.tf`, CloudFormation templates, CDK entry points, Helm charts, Kustomize and Ansible: none found), no drift detection, and no review automation. The EC2 gateway, its network path and the `payroll` account exist only as hardcoded values in `jcl/PAYRUN.jcl` lines 15-21. README confirms 'No source control until the files were copied here in 2021'.",
+      "gap": "Recorded as INFO per surface-flag calibration. Nonetheless the infrastructure that will carry the agent integration (gateway, credentials, network path) is entirely manually managed, so the governance gap becomes material as soon as the API facade from API-Q1 is built.",
+      "recommendation": "Define the gateway, IAM/RACF roles, secrets and network path as code with peer-reviewed changes and drift detection before exposing any agent-facing endpoint.",
       "severity": "Low",
       "priority": "P2",
-      "effort": "High",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
-        "lines": null
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "15-21"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -932,17 +1098,17 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No CI/CD Pipeline",
-      "description": "No HTTP/RPC surface \u2014 API contract testing not applicable. No CI/CD pipeline exists.",
-      "gap": "No automated build or deployment process.",
-      "recommendation": "Establish CI/CD pipeline with contract tests as part of modernization.",
+      "title": "CI/CD with API Contract Testing",
+      "description": "has_http_rpc_surface=false \u2014 there are no APIs to contract-test. There is also no CI/CD pipeline at all: searched for `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `buildspec.yml` and `appspec.yml` \u2014 none present. Compilation and promotion are manual, as implied by 'DO NOT RECOMPILE WITHOUT CONTACTING MAINFRAME TEAM' (`src/PAYRUN.cbl` line 5) and README's 'changes validated in a shared QA region only'.",
+      "gap": "Recorded as INFO per surface-flag calibration: no HTTP/RPC surface \u2014 API contract testing is not applicable. The absence of any pipeline means there is also no automated gate for the fixed-width layout contract that consumers depend on (see DISC-Q1).",
+      "recommendation": "Stand up a pipeline that compiles, runs the ENG-Q4 tests, and diffs the published record layout for breaking changes; extend it to API contract tests once the facade exists.",
       "severity": "Low",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
-        "lines": null
+        "file": "src/PAYRUN.cbl",
+        "lines": "1-6"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -954,83 +1120,17 @@
       "category": "Engineering Maturity",
       "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No Deployment Rollback Capability",
-      "description": "No HTTP/RPC surface \u2014 deployment rollback not applicable. No deployment pipeline. Manual mainframe recompilation required.",
-      "gap": "No automated rollback mechanism.",
-      "recommendation": "Include rollback capability in modernization architecture.",
+      "title": "Rollback Capability",
+      "description": "has_http_rpc_surface=false \u2014 there is no deployed request-serving surface to roll back. Deployment is a manual load-module replacement into `ACME.PAYROLL.LOADLIB` (`jcl/PAYRUN.jcl` line 6); there is no blue/green config, no CodeDeploy rollback trigger, no feature flags and no traffic shifting. Data-side recovery is partially served by GDG generations (`PAYOUT(+1)`), which retain prior outputs but do not restore prior program versions.",
+      "gap": "Recorded as INFO per surface-flag calibration. Practically, reverting a bad payroll change depends on manual load-library restoration with no tested procedure, and GDG retention covers output files only.",
+      "recommendation": "Version load modules with a documented, tested restore procedure (and automate it in the ENG-Q2 pipeline) so a payroll-breaking change can be reverted predictably.",
       "severity": "Low",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "src/PAYRUN.cbl",
-        "lines": "4"
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "DATA-Q7",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "No Data Quality Metrics",
-      "description": "No data quality metrics or monitoring. Tax tables updated manually with no completeness tracking.",
-      "gap": "No data quality awareness. Stale data processed silently.",
-      "recommendation": "Implement data quality checks before batch execution.",
-      "severity": "Low",
-      "priority": "P3",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "DISC-Q2",
-      "category": "Discovery & Documentation",
-      "category_display": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "Legacy Abbreviated Field Names",
-      "description": "Field names use abbreviated mainframe conventions: EMP-RATE, WS-FICA, EMP-SSN. Partially interpretable but require domain knowledge.",
-      "gap": "No data dictionary mapping legacy codes to semantic names.",
-      "recommendation": "Create data dictionary for agent tool definitions.",
-      "severity": "Low",
-      "priority": "P3",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "src/PAYRUN.cbl",
-        "lines": "17-27"
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "DISC-Q3",
-      "category": "Discovery & Documentation",
-      "category_display": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "No Data Catalog or Metadata Layer",
-      "description": "No data catalog. Only implicit schema in COBOL FD section serves as documentation.",
-      "gap": "No metadata layer describing data semantics.",
-      "recommendation": "Create metadata catalog. Consider AWS Glue Data Catalog for modernized layer.",
-      "severity": "Low",
-      "priority": "P3",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "src/PAYRUN.cbl",
-        "lines": "17-29"
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "6"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -1044,28 +1144,21 @@
       "category_id": "API",
       "title": "Rate Limit Documentation and Headers",
       "status": "pass",
-      "reason": "No API/HTTP surface exists \u2014 informational signal, no finding emitted. Suppressed via Informational-Absence Suppression."
-    },
-    {
-      "question_id": "OBS-Q3",
-      "category_id": "OBS",
-      "title": "Business Outcome Metrics",
-      "status": "pass",
-      "reason": "System emits no metrics or telemetry of any kind \u2014 informational signal, no finding emitted. Suppressed via Informational-Absence Suppression."
-    },
-    {
-      "question_id": "STATE-Q7",
-      "category_id": "STATE",
-      "title": "Graceful Degradation Signaling",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 service priority not specified as P0 and critical path status not confirmed."
+      "reason": "No API/HTTP surface of any kind \u2014 no endpoints, no gateway, no throttling surface to document (searched for API Gateway usage plans, WAF rate rules and rate-limit headers: none, and no IaC exists). Informational absence suppressed per the scoring model; no finding emitted."
     },
     {
       "question_id": "DATA-Q3",
       "category_id": "DATA",
       "title": "Selective Query Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no list/query endpoints exist (batch-only system with no API surface)."
+      "reason": "Extended question not triggered: the system exposes no list/query endpoints (has_http_rpc_surface=false). Trigger condition is 'service has list/query endpoints with potentially unbounded results'."
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category_id": "OBS",
+      "title": "Business Outcome Metrics",
+      "status": "pass",
+      "reason": "The system emits no metrics or telemetry of any kind \u2014 output is JES spool only (jcl/PAYRUN.jcl line 13); no put_metric_data, dashboards or KPI alarms exist. Informational absence suppressed per the scoring model; no finding emitted."
     }
   ],
   "remediation_roadmap": {
@@ -1085,115 +1178,146 @@
           "AUTH-Q6",
           "STATE-Q1",
           "DATA-Q1",
-          "DATA-Q2",
-          "AUTH-Q2",
-          "AUTH-Q3",
-          "AUTH-Q5",
-          "AUTH-Q7",
-          "STATE-Q3",
-          "STATE-Q4",
-          "DATA-Q6",
-          "HITL-Q1",
-          "HITL-Q2"
+          "DATA-Q2"
         ],
-        "summary": "Resolve all 7 BLOCKERs and critical RISK-SAFETY findings. Establish API surface, machine identity, audit logging, data scoping, and encryption in transit. This is foundational \u2014 no agent integration can proceed until these are addressed."
+        "summary": "Resolve the seven deployment blockers: build an API facade with machine identity, make the payout write path idempotent and reversible, scope sensitive fields, and establish an immutable audit trail and a residency-safe encrypted transfer."
       },
       {
         "phase": 2,
         "phase_name": "Safety",
         "findings": [
+          "AUTH-Q2",
+          "AUTH-Q3",
           "AUTH-Q4",
+          "AUTH-Q5",
+          "AUTH-Q7",
+          "STATE-Q3",
+          "STATE-Q4",
           "STATE-Q6",
-          "API-Q6",
-          "STATE-Q2",
-          "DATA-Q4",
-          "DATA-Q5",
-          "DISC-Q1",
-          "HITL-Q3",
-          "ENG-Q5",
-          "OBS-Q1",
-          "API-Q2",
-          "API-Q3",
-          "STATE-Q5",
-          "ENG-Q1",
-          "ENG-Q2",
-          "ENG-Q3",
-          "OBS-Q2"
+          "HITL-Q1",
+          "HITL-Q2",
+          "DATA-Q6"
         ],
-        "summary": "Address remaining RISK-SAFETY (identity propagation, blast radius limits) and RISK-QUALITY findings. Build out observability, schema documentation, async patterns, and infrastructure governance."
+        "summary": "Close agent-safety gaps: scoped and action-level authorization, credential management and revocation, concurrency and resilience controls, business blast-radius limits, approval/draft states, and PII redaction in diagnostics."
       },
       {
         "phase": 3,
         "phase_name": "Quality",
         "findings": [
+          "API-Q6",
+          "STATE-Q2",
+          "STATE-Q7",
+          "HITL-Q3",
+          "DATA-Q4",
+          "DATA-Q5",
+          "DISC-Q1",
+          "OBS-Q1",
           "ENG-Q4",
-          "API-Q5",
-          "API-Q7",
-          "DATA-Q7",
-          "DISC-Q2",
-          "DISC-Q3"
+          "ENG-Q5"
         ],
-        "summary": "Address quality improvements: automated testing, response format modernization, event emission, data quality metrics, data catalog, and field naming improvements."
+        "summary": "Raise agent effectiveness: async job semantics, queryable state and degradation signalling, versioned schema, input validation, temporal metadata, structured logging, automated tests, and encryption at rest."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Build REST API wrapper with OpenAPI specification",
+      "action": "Build an API facade over the payroll batch system",
       "question_ids": [
         "API-Q1",
         "API-Q2",
         "API-Q3",
-        "API-Q4",
-        "API-Q6"
+        "API-Q6",
+        "STATE-Q2"
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "No agent integration is possible without a machine-callable API. This is the foundational dependency for all other remediation."
+      "rationale": "Every other control (identity, scoping, validation, rate limiting, tracing) attaches to a callable interface. Direct dataset access and nightly FTP cannot be made agent-safe."
     },
     {
-      "action": "Deploy centralized identity provider with per-agent credentials",
+      "action": "Establish machine identity and immutable audit attribution",
       "question_ids": [
         "AUTH-Q1",
-        "AUTH-Q2",
-        "AUTH-Q3",
-        "AUTH-Q5",
-        "AUTH-Q7"
+        "AUTH-Q6",
+        "AUTH-Q7",
+        "AUTH-Q4"
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "Machine identity is the prerequisite for audit logging, scoped permissions, and agent suspension \u2014 all currently missing."
+      "rationale": "Identity precedes data access: without a distinct, revocable agent principal there is nothing to scope permissions against and no attributable trail for SOX-relevant payroll writes."
     },
     {
-      "action": "Replace plaintext FTP with encrypted transfer (SFTP/AWS Transfer Family)",
+      "action": "Eliminate the hardcoded credential and plaintext PII transfer",
       "question_ids": [
+        "AUTH-Q5",
         "DATA-Q2",
-        "AUTH-Q5"
+        "ENG-Q5"
       ],
-      "priority": "P0",
+      "priority": "P1",
       "effort": "Medium",
-      "rationale": "SSN and bank account data transmitted in cleartext is a compliance violation. Encrypted transfer with IAM credentials addresses both data residency and credential management."
+      "rationale": "A 2003-era password is committed in jcl/PAYRUN.jcl and SSN plus bank account data crosses a trust boundary in cleartext \u2014 the highest-severity concrete exposure in the repository."
     },
     {
-      "action": "Implement audit logging with CloudTrail and immutable storage",
+      "action": "Make the payout write path idempotent, reversible and bounded",
       "question_ids": [
-        "AUTH-Q6"
+        "API-Q4",
+        "STATE-Q1",
+        "STATE-Q3",
+        "STATE-Q6"
       ],
       "priority": "P0",
-      "effort": "Medium",
-      "rationale": "Write-enabled agent operations on financial data require immutable audit trails for SOX compliance."
+      "effort": "High",
+      "rationale": "Agent retries and concurrency at machine speed against a non-idempotent, unbounded, non-reversible disbursement path is the dominant financial risk."
     },
     {
-      "action": "Implement data scoping and field-level access controls",
+      "action": "Scope sensitive payroll fields out of consumer-facing data",
       "question_ids": [
         "DATA-Q1",
+        "AUTH-Q2",
+        "AUTH-Q3",
         "DATA-Q6"
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "Agent-facing responses must exclude SSN and bank account fields unless explicitly authorized through separate scoped endpoints."
+      "rationale": "SSN and bank account travel with every record today; field scoping plus differentiated access is required before any agent reads payroll data."
+    },
+    {
+      "action": "Introduce a proposed-run review gate before disbursement",
+      "question_ids": [
+        "HITL-Q1",
+        "HITL-Q2"
+      ],
+      "priority": "P1",
+      "effort": "Medium",
+      "rationale": "A staging-then-promote state gives both the human approval point and the reviewable intermediate state the system currently lacks entirely."
+    },
+    {
+      "action": "Publish a versioned record schema and retire fixed-width coupling",
+      "question_ids": [
+        "DISC-Q1",
+        "DISC-Q2",
+        "DISC-Q3",
+        "API-Q5"
+      ],
+      "priority": "P2",
+      "effort": "Medium",
+      "rationale": "Consumers reverse-engineer byte offsets with no version marker; a published, versioned, semantically named schema is the prerequisite for reliable agent tool bindings."
+    },
+    {
+      "action": "Stand up CI with tests, contract checks and observability",
+      "question_ids": [
+        "ENG-Q2",
+        "ENG-Q3",
+        "ENG-Q4",
+        "OBS-Q1",
+        "OBS-Q2",
+        "STATE-Q7",
+        "DATA-Q4",
+        "DATA-Q5"
+      ],
+      "priority": "P2",
+      "effort": "High",
+      "rationale": "There are zero automated tests, no pipeline and no structured logging, so agent-breaking changes and degraded output (missing state tax, stale tax tables) are undetectable."
     }
   ],
-  "analysis_type": "ara",
-  "repo_name": "legacy-payroll-system"
+  "analysis_type": "ara"
 }

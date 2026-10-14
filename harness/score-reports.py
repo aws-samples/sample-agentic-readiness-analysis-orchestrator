@@ -16,10 +16,9 @@ So a change can score 92 on judge.py (did exactly what it claimed) while the rep
 produces are confidently wrong — judge.py has no way to notice. That gap is what this
 closes, and it is what found the counter defects below.
 
-RUBRIC: ARA_RUBRIC / MOD_RUBRIC started as the benchmarking team's own evaluation prompts,
-carried verbatim so a score here would be comparable with theirs. They are no longer
-verbatim — we own them now, and two factual errors against our TDs were corrected (see
-the comments above each). They score 0.0-1.0 and weight a MISSED BLOCKER / missed High
+RUBRIC: ARA_RUBRIC / MOD_RUBRIC are this repo's evaluation prompts. Two statements that
+were factually wrong about our TDs have been corrected and are pinned by tests (see the
+comments above each). They score 0.0-1.0 and weight a MISSED BLOCKER / missed High
 finding above a spurious INFO — the asymmetry we want, since a missed agent-safety
 blocker is the expensive error.
 
@@ -269,15 +268,18 @@ def _tier_ladder() -> str:
 
 
 # ---------------------------------------------------------------------------------------
-# Evaluation rubrics. These began as the benchmarking team's prompts, carried verbatim for
-# comparability. That is no longer true and the divergence is deliberate: the originals
-# contained statements that are FACTUALLY WRONG about our TDs, so carrying them verbatim
-# bought a grader validating against a spec that does not exist. Each fix is marked
-# `[fix]` with the SKILL.md line that governs. This corrected text is what we send back to
-# the benchmarking team — their scores are affected by the same errors.
+# Evaluation rubrics for the in-repo grader.
 #
-# Everything NOT marked `[fix]` is still their wording. Keep it that way: paraphrasing for
-# taste re-opens the comparability gap for no benefit.
+# Two annotation markers appear in the text below and both are load-bearing:
+#   `[fix]` — a correction against the TD's own rubric, with the governing SKILL.md rule.
+#             These exist because a grader validating against a spec the TD does not
+#             implement produces confident, wrong scores.
+#   `[+]`   — an addition: a dimension the base criteria did not cover (question coverage,
+#             conditional-BLOCKER reasoning, the findings/evaluations partition).
+#
+# ‼ EDIT THIS TEXT ONLY DELIBERATELY. It is grader input, so a wording change can move
+# scores and invalidate comparisons against the committed accuracy baseline. Rewording for
+# taste is not free.
 # ---------------------------------------------------------------------------------------
 
 ARA_RUBRIC = f"""\

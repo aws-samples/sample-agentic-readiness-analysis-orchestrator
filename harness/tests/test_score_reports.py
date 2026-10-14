@@ -629,20 +629,20 @@ def test_a_report_tree_is_a_parameter_not_a_hardcoded_path():
     assert row["source_tree"] == "_after"
 
 
-# --- the rubrics stay verbatim ---------------------------------------------------------
+# --- the rubrics keep their load-bearing structure -------------------------------------
 
-def test_rubrics_keep_the_benchmark_structure_and_error_weighting():
-    """These began as the benchmarking team's prompts and still carry their shape.
+def test_rubrics_keep_their_structure_and_error_weighting():
+    """Pin the load-bearing structure of the grader prompts.
 
-    They are no longer verbatim — see test_corrected_rubric_bugs_stay_fixed. What must
-    survive any edit is the load-bearing structure: the question counts, the output
-    contract, and the error-weighting asymmetry that makes a missed blocker cost more than
-    a spurious INFO.
+    What must survive any edit: the question counts, the output contract, and the
+    error-weighting asymmetry that makes a missed blocker cost more than a spurious INFO.
+    A rubric is grader input, so a wording change can move scores — these assertions make
+    a structural regression fail loudly instead of showing up as score drift.
     """
     # The COUNT is derived from the TD (EXPECTED_QUESTIONS), not transcribed — assert the
     # phrase with the derived number so a rubric edit doesn't require touching this literal.
     assert f"{sr.EXPECTED_QUESTIONS['ara']} questions across the 8 sections" in sr.ARA_RUBRIC
-    # Match on a single line: the prompts are carried with their original hard wraps, so a
+    # Match on a single line: the prompts carry hard wraps, so a
     # phrase spanning a line break will not appear contiguously.
     assert "missed agent-safety blocker is the" in sr.ARA_RUBRIC
     assert "expensive error" in sr.ARA_RUBRIC
@@ -653,12 +653,12 @@ def test_rubrics_keep_the_benchmark_structure_and_error_weighting():
 
 
 def test_corrected_rubric_bugs_stay_fixed():
-    """Two statements in the original prompts were FACTUALLY WRONG about our TDs.
+    """Two rubric statements did not match what our TDs actually implement.
 
     Both were latent rather than harmless. The qualifier rule only misfires once a repo
     reaches blocker_count 0 — which no fixture does yet, so it would have first appeared
-    as a mystery failure on the new Pilot-Ready fixtures. Pin them so a future re-sync
-    with the benchmarking team cannot silently reintroduce either.
+    as a mystery failure on the Pilot-Ready fixtures. Pin them so a future rubric edit
+    cannot silently reintroduce either.
     """
     # 1. The qualifier needs risk_safety_count >= 3 (SKILL.md 2054), not merely "RISK-SAFETY
     #    present without a BLOCKER" — at 1-2 the correct tier is plain Pilot-Ready.

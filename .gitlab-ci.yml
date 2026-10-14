@@ -86,6 +86,16 @@ variables:
 
 default:
   image: python:3.13-slim
+  # ‼ interruptible: a new push to the same ref CANCELS the superseded pipeline.
+  # Without it, every push left the previous run going: the stale pipeline kept burning
+  # billable fixture analysis on code that no longer existed, and — worse — kept showing
+  # its own legitimate failure on the MR, so a green current run was read as red. That
+  # happened on !67 and cost a round of "it's erroring" / "no, that's the old commit".
+  #
+  # Safe here because every job is re-runnable from the ref: nothing publishes, nothing
+  # mutates shared state. The ONE exception is the re-baseline, which opens an MR at the
+  # end and must not be killed mid-write — both its jobs opt out explicitly below.
+  interruptible: true
   # No `tags:` — AWS GitLab has no tag literally named "shared". Untagged jobs are
   # auto-picked-up by the default shared fleet (t-shirt sizes like amd64-small /
   # amd64-medium are opt-in via tags; add one only if a job needs more CPU/RAM).
@@ -238,6 +248,41 @@ harness:auth-check:
         exit 1
       fi
   allow_failure: true   # advisory — a red auth-check must not block anything
+
+# -----------------------------------------------------------------------------
+# harness:advisor-skill   (gate; offline, ~1 second)
+# Mechanical checks over advisor/ — the modernization-advisor agent skill an SA
+# copies commands out of. Links and anchors resolve, repo paths named in code fences
+# exist, "atx update" is only ever denied (there is no such subcommand), --agent-scope
+# absence is stated as INFERRED rather than read-only, no changelog archaeology, and the
+# atx baseline version agrees across the five files that carry it.
+#
+# WHY THIS ONE GATES INSTEAD OF ADVISING: the rest of this pipeline is advisory because
+# its signal comes from an LLM, and an LLM's signal should not block a human. This job is
+# grep and os.path — it cannot be wrong about run-to-run variance. The two facts it pins
+# (no `atx update`; --agent-scope infers) have each been corrected and then re-broken
+# across review rounds, which is precisely what a deterministic gate is for: an SA who
+# trusts a command that does not exist loses an afternoon.
+#
+# before_script REPLACES the default's atx/Node/AWS install — this file needs stdlib Python
+# only, no atx, no Node, no AWS, no network, and that is what makes it cheap enough to run
+# on every push. `git` is installed anyway: replacing before_script inherits none of the
+# default's apt line, and test_fixtures_integrity.py holds every job that runs a
+# harness/tests path to having git present, because the git-backed integrity tests in that
+# suite die with FileNotFoundError without it. Honour the suite-wide invariant rather than
+# carving an exception for one file out of it.
+# -----------------------------------------------------------------------------
+harness:advisor-skill:
+  stage: gate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git
+    - pip install --quiet --cache-dir "$PIP_CACHE_DIR" pytest
+  script:
+    - python3 -m pytest harness/tests/test_advisor_skill.py -q
 
 # -----------------------------------------------------------------------------
 # Entry 0b — harness:comment-check   (manual; MR-comment wiring verification)
@@ -707,6 +752,7 @@ harness:portfolio-benchmark:
   allow_failure: true   # advisory — never blocks
 
 harness:rebaseline-shard:
+  interruptible: false   # must not be killed mid-sweep: the gather writes a branch and opens an MR
   stage: analyze
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -760,6 +806,7 @@ harness:rebaseline-shard:
   allow_failure: true   # advisory — a shard death must SURFACE (gather flags the gap), not block
 
 harness:rebaseline-gather:
+  interruptible: false   # must not be killed mid-sweep: the gather writes a branch and opens an MR
   stage: judge   # runs AFTER all shards (analyze stage) complete
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -780,7 +827,7 @@ harness:rebaseline-gather:
     # Inherit the default before_script (Node + atx + AWS vend — atx is needed for the
     # portfolio exec), then add git identity for the branch commit below.
     - !reference [default, before_script]
-    - git config user.email "harness-bot@noreply.aws.dev"
+    - git config user.email "harness-bot@users.noreply.github.com"
     - git config user.name "harness re-baseline bot"
     # pytest is NOT in the default before_script (only awscli is). The self-test step below
     # runs the offline suite against the freshly written golden, so install the harness deps.
@@ -991,7 +1038,7 @@ harness:scorer-sync:
     # re-publish MR note) + the harness Python deps (skill_table parses the TD with PyYAML).
     - apt-get update -qq && apt-get install -y -qq --no-install-recommends git curl ca-certificates
     - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
-    - git config user.email "harness-bot@noreply.aws.dev"
+    - git config user.email "harness-bot@users.noreply.github.com"
     - git config user.name "harness scorer-sync bot"
   script:
     # A fork MR runs in the fork's project, and HARNESS_MR_TOKEN cannot push to a fork

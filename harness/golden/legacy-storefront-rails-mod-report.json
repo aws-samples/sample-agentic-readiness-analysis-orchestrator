@@ -1,18 +1,22 @@
 {
   "analysis_type": "mod",
+  "repo_name": "legacy-storefront-rails",
+  "overall_score": 1.17,
+  "overall_rating": "Not Ready",
   "metadata": {
-    "repository": "legacy-storefront-rails",
-    "analysis_date": "2025-07-21",
+    "analysis_type": "mod",
+    "analysis_date": "2026-10-13",
     "td_version": "modernization-readiness-analysis",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Application source code (Ruby/Rails controller) with a deployable entry point (Rails application serving HTTP) and database-backed CRUD operations present. README describes active EC2 deployment. Classified as application.",
+    "repo_type_justification": "Application source code is present (app/controllers/orders_controller.rb, a Rails 2.3 controller with HTTP actions) and runtime configuration (config/payment.yml), with no resource-provisioning IaC, no Dockerfile and no library packaging manifest. Classified as application (residual runnable-app case).",
     "service_archetype": "stateful-crud",
-    "archetype_source": "auto-detected",
-    "archetype_justification": "MySQL database with Order ActiveRecord model, create/update endpoints, and user-specific order data with payment processing. Classified as stateful-crud.",
+    "service_archetype_source": "auto-detected",
+    "archetype_justification": "The service owns persistent state (Order model, raw find_by_sql against MySQL per README.md) and exposes write endpoints (create persists an order and charges a card) alongside reads. Classified as stateful-crud.",
     "priority": null,
     "tags": [],
     "context": null,
+    "preferences": null,
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_at_rest_data_surface": true,
@@ -20,9 +24,24 @@
       "has_api_surface": true,
       "has_multi_instance_deployment": false,
       "has_iac_provisioning_aws_resources": false
+    },
+    "language": "Ruby 1.8.7 (Rails 2.3)",
+    "loc": 37,
+    "framework": "Ruby on Rails 2.3"
+  },
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 10,
+    "medium_count": 21,
+    "low_count": 1,
+    "rule_matched": "2-11 High \u2192 Remediation Required",
+    "classification_consistency_check": {
+      "status": "divergent",
+      "score_band": "Not Ready",
+      "count_tier": "Remediation Required",
+      "reason": "Overall score 1.17 yields the Not Ready band, but only 10 of the 37 questions are both core and scored 1, leaving the High count two short of the >=12 threshold that would make the count-based tier Not Ready. Many genuine Score-1 gaps (INF-Q3, INF-Q4, INF-Q6, INF-Q7, INF-Q8, APP-Q3, APP-Q4, APP-Q5, APP-Q6, OPS-Q1 through OPS-Q4, OPS-Q8) sit on non-core questions and register as Medium. Surface gating was applied correctly and withheld five questions (INF-Q9, SEC-Q1, OPS-Q5, OPS-Q7, OPS-Q9) that this repo has no surface for, so the divergence is a scoring-vocabulary artifact rather than a gating error. Treat this service as the more severe reading: Not Ready."
     }
   },
-  "overall_score": 1.18,
   "categories": [
     {
       "category_id": "INF",
@@ -36,15 +55,15 @@
       "category_id": "APP",
       "category": "Application Architecture",
       "category_display": "Application Architecture",
-      "numeric_score": 1.17,
+      "numeric_score": 1.33,
       "score_rating": "Not Ready",
-      "severity_status": "Critical"
+      "severity_status": "Needs Work"
     },
     {
       "category_id": "DATA",
       "category": "Data Platform",
       "category_display": "Data Platform Modernization",
-      "numeric_score": 1.75,
+      "numeric_score": 1.5,
       "score_rating": "Needs Work",
       "severity_status": "Critical"
     },
@@ -65,107 +84,58 @@
       "severity_status": "Critical"
     }
   ],
-  "classification": {
-    "tier": "Remediation Required",
-    "high_count": 11,
-    "medium_count": 20,
-    "low_count": 0,
-    "rule_matched": "2-11 High \u2192 Remediation Required",
-    "classification_consistency_check": {
-      "status": "divergent",
-      "score_band": "Not Ready",
-      "count_tier": "Remediation Required",
-      "reason": "Score 1.18 yields Not Ready band but 11 High findings (< 12 threshold) yields Remediation Required tier. The systemic depth of gaps drives overall score below 1.5 while the count remains below the 12-High Not Ready threshold."
-    }
-  },
   "top_gaps": [
     {
       "rank": 1,
       "question_id": "SEC-Q5",
       "title": "Secrets Management",
       "score": 1,
-      "gap": "Plaintext payment credentials committed to source control",
-      "impact": "Critical security vulnerability \u2014 credentials exposed in version history"
+      "gap": "Live payment-gateway merchant ID and API password are committed in plaintext in config/payment.yml.",
+      "impact": "Deployment-blocking credential exposure; the secret must be rotated before any migration work begins, and git history must be treated as compromised."
     },
     {
       "rank": 2,
-      "question_id": "INF-Q10",
-      "title": "Infrastructure as Code Coverage",
-      "score": 1,
-      "gap": "No IaC \u2014 all infrastructure manually provisioned",
-      "impact": "Infrastructure non-reproducible, non-auditable, cannot disaster-recover"
-    },
-    {
-      "rank": 3,
-      "question_id": "INF-Q11",
-      "title": "CI/CD Automation",
-      "score": 1,
-      "gap": "No CI/CD pipeline \u2014 manual Capistrano 2 deployments",
-      "impact": "No automated testing, no deployment safety, no rollback"
-    },
-    {
-      "rank": 4,
-      "question_id": "APP-Q2",
-      "title": "Monolith vs Microservices",
-      "score": 1,
-      "gap": "Tightly-coupled monolith with no module boundaries",
-      "impact": "Cannot independently scale, deploy, or evolve components"
-    },
-    {
-      "rank": 5,
       "question_id": "INF-Q1",
       "title": "Managed Compute",
       "score": 1,
-      "gap": "All compute on raw EC2 with no managed services",
-      "impact": "Manual scaling, patching, and capacity planning required"
+      "gap": "All compute is raw EC2 running Mongrel behind Apache; no containers, no ECS/EKS/Lambda.",
+      "impact": "Blocks every downstream modernization step - no elastic scaling, manual patching of an EOL runtime, no deployment immutability."
+    },
+    {
+      "rank": 3,
+      "question_id": "INF-Q2",
+      "title": "Managed Databases",
+      "score": 1,
+      "gap": "MySQL 5.1 self-managed on a separate EC2 instance; no RDS/Aurora.",
+      "impact": "EOL engine with no managed backups, failover or patching; a single instance failure loses the storefront's order data."
+    },
+    {
+      "rank": 4,
+      "question_id": "INF-Q11",
+      "title": "CI/CD Automation",
+      "score": 1,
+      "gap": "No pipeline of any kind - deployment is Capistrano 2 to a fixed host list; the Test::Unit suite no longer runs.",
+      "impact": "No automated quality gate means every modernization change is high-risk and unverifiable."
+    },
+    {
+      "rank": 5,
+      "question_id": "INF-Q10",
+      "title": "Infrastructure as Code Coverage",
+      "score": 1,
+      "gap": "No Terraform, CloudFormation, CDK or any IaC; all compute, networking and database infrastructure is manually created.",
+      "impact": "Infrastructure is non-reproducible, so migration, DR and environment parity all require manual rebuild."
     }
   ],
-  "decomposition_strategy": {
-    "app_q2_score": 1,
-    "recommended_approach": "strangler-fig-or-replatform",
-    "rationale": "The monolith is on EOL stack (Ruby 1.8.7, Rails 2.3) making in-place modularization unviable. Strangler Fig or full re-platform recommended.",
-    "approaches": [
-      {
-        "name": "Strengthen as Modular Monolith",
-        "viable": false,
-        "reason": "Underlying stack is EOL with unfetchable gems"
-      },
-      {
-        "name": "Strangler Fig (Parallel Track)",
-        "viable": true,
-        "reason": "Build new services alongside existing monolith, migrate features incrementally"
-      },
-      {
-        "name": "Conditional / Adaptive",
-        "viable": true,
-        "reason": "Re-platform to modern stack first, then selectively extract"
-      },
-      {
-        "name": "Big-Bang Rewrite",
-        "viable": true,
-        "reason": "Consider only because existing stack is unmaintainable \u2014 high risk"
-      }
-    ],
-    "effort_factors": {
-      "module_boundaries": "high",
-      "data_coupling": "high",
-      "stored_procedures": "low",
-      "communication_patterns": "medium",
-      "cicd_maturity": "high",
-      "test_coverage": "high"
-    },
-    "calibrated_effort": "High (12-18 months)"
-  },
   "findings": [
     {
       "question_id": "INF-Q1",
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "No managed compute \u2014 all workloads on raw EC2",
-      "description": "All compute runs on raw EC2 instances with Mongrel behind Apache mod_proxy_balancer. No managed container orchestration or serverless services.",
-      "gap": "No managed compute services in use. All compute requires manual provisioning, patching, and scaling.",
-      "recommendation": "Migrate to managed compute (ECS with Fargate or EKS) after containerizing the application. Requires Ruby/Rails stack upgrade as prerequisite.",
+      "title": "Managed Compute",
+      "description": "All compute runs on raw EC2: README.md documents a Mongrel cluster behind Apache mod_proxy_balancer deployed by Capistrano 2 to a fixed set of EC2 hosts. No Dockerfile, no ECS/EKS/Fargate/Lambda definitions and no IaC referencing managed compute exist in the repo.",
+      "gap": "Zero managed-compute adoption. Capacity is fixed, patching of an EOL Ruby runtime is manual, and hosts are mutable and hand-maintained.",
+      "recommendation": "Externalize configuration and adopt Bundler plus a Rack-compatible server (Puma), then containerize and move to ECS on Fargate. Treat the runtime upgrade off Ruby 1.8.7 as part of the same effort so the migration does not freeze an unpatchable runtime into an image.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
@@ -186,10 +156,10 @@
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Self-managed MySQL 5.1 on EC2",
-      "description": "MySQL 5.1 runs self-managed on a separate EC2 instance. No managed database service is in use.",
-      "gap": "Database is entirely self-managed \u2014 manual patching, backup, failover, and scaling required.",
-      "recommendation": "Migrate to Amazon RDS MySQL or Aurora MySQL. Standard SQL without stored procedures makes DMS migration feasible.",
+      "title": "Managed Databases",
+      "description": "README.md documents MySQL 5.1 running on a separate EC2 instance. No aws_rds_*, aws_dynamodb_* or other managed-database resources exist (there is no IaC at all). The application reaches the database directly via ActiveRecord and raw find_by_sql.",
+      "gap": "The production order database is entirely self-managed: no managed failover, no automated backup, no managed patching, single instance.",
+      "recommendation": "Migrate to Amazon RDS for MySQL 8.0 or Aurora MySQL-Compatible with Multi-AZ, automated backups and point-in-time recovery. Use AWS SCT for the 5.1 to 8.0 compatibility assessment and DMS for a low-downtime cutover.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -210,17 +180,17 @@
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "No workflow orchestration for order-payment flow",
-      "description": "The order creation workflow (create \u2192 charge card) is hardcoded in the controller with no orchestration, retry, or error handling.",
-      "gap": "No orchestration \u2014 workflow logic hardcoded with no retry or state management.",
-      "recommendation": "Adopt AWS Step Functions for the order-payment workflow to provide retry logic and error handling.",
+      "title": "Workflow Orchestration",
+      "description": "Archetype-calibrated (stateful-crud). The order-placement workflow - persist order then charge the card - is hardcoded in OrdersController#create, which calls the private charge_card method inline with no retry, compensation or state tracking. No aws_sfn_* or workflow definitions exist.",
+      "gap": "A business-critical multi-step operation (order plus payment) has no orchestration, no error handling and no durable state. A failure after @order.save but during gateway.charge leaves an order with indeterminate payment state.",
+      "recommendation": "Model order placement as a Step Functions state machine (or at minimum a durable job with explicit status) with a compensating void/refund step, once the payment call is moved out of the request path.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "app/controllers/orders_controller.rb",
-        "lines": null
+        "lines": "14-23, 29-35"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -234,17 +204,17 @@
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "No async messaging \u2014 synchronous payment processing",
-      "description": "No messaging infrastructure exists. Payment gateway is called synchronously within the HTTP request. No event-driven patterns for state changes.",
-      "gap": "No messaging where state changes should propagate asynchronously \u2014 tight synchronous coupling.",
-      "recommendation": "Introduce SQS or EventBridge for order state change events. Decouple payment processing from the HTTP request.",
+      "title": "Async Messaging and Streaming",
+      "description": "Archetype-calibrated (stateful-crud). No messaging or streaming infrastructure exists: no SQS/SNS/EventBridge/Kinesis resources, no messaging client libraries and no self-managed broker. The order state change in create crosses a service boundary synchronously via a direct SOAP call to an external payment gateway.",
+      "gap": "State changes that cross a service boundary are tightly synchronously coupled. An outage or latency spike at the payment gateway directly degrades order creation, with no buffer and no retry.",
+      "recommendation": "Introduce SQS between order creation and the payment charge, with an idempotency key per order and a dead-letter queue. Publish order state changes to EventBridge so downstream consumers can be added without further coupling.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "app/controllers/orders_controller.rb",
-        "lines": null
+        "lines": "29-35"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -258,10 +228,10 @@
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "No network security configuration",
-      "description": "No VPC, subnet, security group, or NACL configuration exists. No HTTPS termination at application tier.",
-      "gap": "No evidence of network security controls. HTTPS termination explicitly missing.",
-      "recommendation": "Define infrastructure in IaC with proper VPC, private subnets, security groups, and TLS termination.",
+      "title": "Network Security",
+      "description": "The repo owns no network surface definition - no VPC/subnet/security-group IaC, no Kubernetes NetworkPolicy, no service-mesh rules. README.md describes a public-facing Apache tier on EC2 with no HTTPS termination configured in the app tier, and a MySQL instance on a separate EC2 host with no documented segmentation.",
+      "gap": "No evidence of private subnets, least-privilege security groups or tier segmentation; plaintext HTTP in the app tier while card data is handled in charge_card.",
+      "recommendation": "Codify a VPC with public ALB subnets and private application/database subnets, least-privilege security groups between tiers, TLS termination at the load balancer with HTTPS enforced end-to-end, and VPC endpoints for AWS service access.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -282,10 +252,10 @@
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "No managed API entry point",
-      "description": "No API Gateway, ALB, or CloudFront defined. Basic Apache reverse proxy described in README but not configured in repo.",
-      "gap": "No managed entry point with throttling, authentication, or request validation.",
-      "recommendation": "Implement API Gateway or ALB with WAF for request validation and throttling.",
+      "title": "API Entry Point",
+      "description": "The entry point is a self-managed Apache mod_proxy_balancer in front of a Mongrel cluster (README.md). No API Gateway, ALB or CloudFront resources exist, and there is no throttling, request validation or edge authentication.",
+      "gap": "Services are fronted only by a self-managed reverse proxy - no managed entry point providing throttling, auth, request validation or health-checked routing.",
+      "recommendation": "Place an ALB (with TLS termination and health checks) in front of the application, and API Gateway in front of any extracted service APIs so throttling, request validation and authorizer integration are available centrally.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -306,10 +276,10 @@
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "No auto-scaling \u2014 static capacity",
-      "description": "No auto-scaling configured. Application deploys to a fixed set of EC2 hosts with statically provisioned capacity.",
-      "gap": "All capacity statically provisioned \u2014 no auto-scaling for compute or database.",
-      "recommendation": "Implement auto-scaling as part of compute modernization (ECS/EKS target-tracking policies).",
+      "title": "Auto-Scaling",
+      "description": "Capacity is statically provisioned: Capistrano 2 deploys to a fixed set of EC2 hosts (README.md). No aws_autoscaling_* or aws_appautoscaling_* resources, no scaling policies and no database capacity scaling configuration exist.",
+      "gap": "No auto-scaling on any layer. A customer-facing storefront cannot absorb traffic peaks, and off-peak capacity is paid for continuously.",
+      "recommendation": "After containerization configure ECS service auto-scaling with target tracking on request count per target, and add Aurora read replicas with replica auto-scaling for the read path.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -330,10 +300,10 @@
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "No backup or recovery configuration",
-      "description": "No backup configuration for MySQL database on EC2. No retention policy, no restore procedures.",
-      "gap": "No automated backup configuration for any data store.",
-      "recommendation": "Migrate to RDS/Aurora for automated backups, or implement AWS Backup for EC2-hosted MySQL.",
+      "title": "Backup and Recovery",
+      "description": "Surface gate passed (has_persistent_data_store=true). No backup configuration exists anywhere in the repo: no backup_retention_period, no aws_backup_plan, no snapshot lifecycle policy and no documented restore procedure, for a self-managed MySQL 5.1 instance on EC2.",
+      "gap": "No evidence of any automated backup or tested restore for the system of record for customer orders and payment state.",
+      "recommendation": "As part of the RDS/Aurora migration enable automated backups with an explicit retention period and point-in-time recovery, register the database with AWS Backup under a policy-managed plan, and document plus rehearse the restore procedure.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -354,16 +324,16 @@
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Zero Infrastructure as Code coverage",
-      "description": "No IaC exists. No Terraform, CloudFormation, CDK, or Helm. All infrastructure manually created.",
-      "gap": "0% IaC coverage \u2014 all infrastructure is ClickOps, non-reproducible, non-auditable.",
-      "recommendation": "Adopt Terraform or CDK to codify target-state architecture (VPC, compute, database).",
+      "title": "Infrastructure as Code Coverage",
+      "description": "No IaC of any kind. A full-repo scan found no .tf/.tfvars, no CloudFormation templates, no CDK app or cdk.json, no Pulumi or SAM, no Helm chart or kustomization.yaml and no Ansible playbooks. The service demonstrably depends on compute, a database and a networking/entry surface, none of which is defined in code.",
+      "gap": "0% IaC coverage across every infrastructure category the service depends on. Infrastructure is ClickOps and non-reproducible.",
+      "recommendation": "Codify the existing footprint before changing it: Terraform or CDK for the VPC and subnets, the compute tier, the database and the operational resources (CloudWatch alarms, backup plan, DNS). This is a prerequisite for the container and managed-database pathways.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": ".",
+        "file": "*.tf",
         "lines": null
       },
       "mod_metadata": {
@@ -378,16 +348,16 @@
       "category": "Infrastructure & DevOps",
       "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "No CI/CD automation \u2014 manual deployments",
-      "description": "No CI/CD pipeline exists. Deployment is manual via Capistrano 2 to fixed EC2 hosts.",
-      "gap": "No CI/CD automation \u2014 all deployments manual with no automated build, test, or deploy.",
-      "recommendation": "Implement CI/CD pipeline (CodePipeline + CodeBuild or GitHub Actions) with automated stages.",
+      "title": "CI/CD Automation",
+      "description": "No pipeline definitions exist - no .github/workflows/, .gitlab-ci.yml, Jenkinsfile, buildspec.yml or appspec.yml. README.md states deployment is Capistrano 2 to a fixed set of EC2 hosts, a manually invoked push, and the test suite that would gate such a pipeline no longer runs.",
+      "gap": "No automated build, test, deploy or rollback stage for either application code or infrastructure (there is no IaC to deploy either).",
+      "recommendation": "Stand up CodePipeline/CodeBuild (or GitHub Actions) with test, build, scan and deploy stages plus an automated rollback path. Sequence this before the other pathways so each subsequent change is verifiable.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "README.md",
+        "file": ".github/workflows/",
         "lines": null
       },
       "mod_metadata": {
@@ -402,10 +372,10 @@
       "category": "Application Architecture",
       "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "EOL language and framework \u2014 Ruby 1.8.7 / Rails 2.3",
-      "description": "Ruby 1.8.7 (EOL 2013) with Rails 2.3 (EOL 2013). Gems pinned in environment.rb without Bundler.",
-      "gap": "Compound legacy: language version, framework, and dependency management all deeply regressed.",
-      "recommendation": "Upgrade to Ruby 3.2+ with Rails 7.x, or rewrite in a cloud-native language (TypeScript, Go, Python).",
+      "title": "Programming Languages",
+      "description": "Ruby 1.8.7 with Rails 2.3, both long past end of life (README.md). Compound legacy signals across all three axes: language runtime EOL, framework EOL and no AWS SDK present at all. Dependencies are pinned in environment.rb rather than Bundler and some gems are no longer fetchable. Ruby also sits in the Score-2 band for cloud-native tooling depth regardless of version.",
+      "gap": "The runtime and framework are unsupported and accumulating CVEs (README.md cites mass-assignment among them), and the dependency set is not reliably resolvable, which blocks reproducible builds.",
+      "recommendation": "Plan a staged upgrade to a supported Ruby (3.x) and Rails (7.x), starting by converting gem pinning to Bundler so dependencies are resolvable and auditable. Where modules are extracted during decomposition, evaluate a first-class cloud-native runtime for the new services.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
@@ -426,21 +396,21 @@
       "category": "Application Architecture",
       "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "Tightly-coupled monolith with no module boundaries",
-      "description": "Single deployable unit with no separation of concerns. Controller handles order CRUD, payment processing, and raw SQL all in one place.",
-      "gap": "Tightly-coupled monolith with pervasive shared state \u2014 no module boundaries, no architectural separation.",
-      "recommendation": "See Decomposition Strategy. Strangler Fig or re-platform approach recommended given EOL stack.",
-      "severity": "High",
+      "title": "Monolith vs Microservices",
+      "description": "A single deployable Rails monolith. The conventional Rails layout provides identifiable module seams, but modules share one database schema and the controller layer accesses data directly with raw SQL (Order.find_by_sql in index) rather than through a defined interface. Business logic including the payment integration lives inside the controller. No multiple service directories, Helm charts, compose services or per-service IaC exist.",
+      "gap": "Identifiable modules with shared schema and direct cross-layer SQL access; no independently deployable units, so scaling, deployment and failure domains are all monolith-wide.",
+      "recommendation": "Apply the Strangler Fig approach in the Decomposition Strategy section: extract the payment integration first behind an Anti-corruption Layer, then order search, keeping the monolith in service throughout.",
+      "severity": "Medium",
       "priority": "P1",
       "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "app/controllers/orders_controller.rb",
-        "lines": null
+        "lines": "7-35"
       },
       "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
+        "internal_score": 2,
+        "score_label": "Needs Work",
         "archetype_calibrated": false,
         "core_question": true
       }
@@ -450,17 +420,17 @@
       "category": "Application Architecture",
       "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "All communication synchronous with no async patterns",
-      "description": "All communication is synchronous HTTP. Payment gateway blocks HTTP request thread. No async patterns.",
-      "gap": "All communication synchronous \u2014 payment gateway latency directly impacts user response time.",
-      "recommendation": "Introduce async processing for payment operations (SQS + worker) and order notifications.",
+      "title": "Async vs Sync Communication",
+      "description": "Archetype-calibrated (stateful-crud). All communication is synchronous. charge_card instantiates PaymentGateway and calls gateway.charge inline within the create request against a deprecated SOAP endpoint. No message publishing, queue consumers or event handlers exist anywhere in the codebase.",
+      "gap": "0% async. Cross-service state propagation (order to payment) is a blocking in-request call to a third party with variable latency, creating cascading-failure and timeout exposure.",
+      "recommendation": "Move the payment charge behind SQS with idempotency keys and a DLQ, and expose order payment status to the client via polling or a callback rather than holding the HTTP request open.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "app/controllers/orders_controller.rb",
-        "lines": null
+        "lines": "14-23, 29-35"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -474,17 +444,17 @@
       "category": "Application Architecture",
       "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "Long-running payment call handled synchronously",
-      "description": "External SOAP gateway call made synchronously within HTTP request. No timeout, no async job, no status polling.",
-      "gap": "External payment gateway call handled synchronously with no timeout or async pattern.",
-      "recommendation": "Move payment to async job (SQS worker or Step Functions) with status polling pattern.",
+      "title": "Long-Running Process Handling",
+      "description": "Archetype-calibrated (stateful-crud). No background job framework, job status API or async invocation patterns exist. The external payment gateway call, whose latency is governed by a third party SLA, runs synchronously inside create, and index runs an unbounded SELECT * over orders with no pagination or limit.",
+      "gap": "All operations are synchronous regardless of duration, including a variable-latency external call and an unbounded table scan on the order list.",
+      "recommendation": "Introduce a background job path (SQS consumer or equivalent) for the payment charge with a status endpoint the client polls, and add pagination plus an index on status/created_at to bound the index query.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "app/controllers/orders_controller.rb",
-        "lines": null
+        "lines": "7-12, 29-35"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -498,17 +468,17 @@
       "category": "Application Architecture",
       "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "No API versioning strategy",
-      "description": "No API versioning. No version prefix, no version headers, no backward compatibility mechanism.",
-      "gap": "No versioning \u2014 breaking changes deployed directly with no consumer migration path.",
-      "recommendation": "Implement URL-based versioning (/v1/orders) when rebuilding the API layer.",
+      "title": "API Versioning Strategy",
+      "description": "No versioning of any kind. Routing uses Rails 2.3 implicit action routing (redirect_to :action => 'show') with no /v1/ path segment, no Accept-Version header handling and no versioning annotations. There is no OpenAPI/Swagger spec and no changelog.",
+      "gap": "Any change to request or response shape breaks all consumers simultaneously, with no migration window.",
+      "recommendation": "Introduce a URL-path version prefix (/v1/orders) for the external surface and publish an OpenAPI specification as the contract. Version extracted services from day one during decomposition.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "app/controllers/orders_controller.rb",
-        "lines": null
+        "lines": "19"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -522,14 +492,14 @@
       "category": "Application Architecture",
       "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "All service endpoints hardcoded",
-      "description": "Payment gateway endpoint hardcoded in config/payment.yml. No service discovery or dynamic routing.",
-      "gap": "All service endpoints hardcoded in configuration files checked into source control.",
-      "recommendation": "Externalize configuration using environment variables or AWS SSM Parameter Store.",
+      "title": "Service Discovery",
+      "description": "Endpoints are hard-coded in version-controlled configuration. config/payment.yml pins endpoint: https://gateway.legacy-pay.example.com/soap/v1, loaded at call time by YAML.load_file. No AWS Cloud Map, Istio, Consul or environment-variable indirection is present.",
+      "gap": "Downstream endpoints are baked into a committed file, so relocating, failing over or environment-switching the payment gateway requires a code deploy.",
+      "recommendation": "Move endpoint configuration out of the repo into SSM Parameter Store (with Secrets Manager for the credentials), and register extracted services in AWS Cloud Map so resolution is dynamic.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "config/payment.yml",
         "lines": null
@@ -546,13 +516,13 @@
       "category": "Data Platform",
       "category_display": "Data Platform Modernization",
       "category_id": "DATA",
-      "title": "No managed object storage \u2014 assets served from app",
-      "description": "No S3 or managed object storage. Static assets served directly from application server with no CDN.",
-      "gap": "Data on local file systems with no managed storage or CDN.",
-      "recommendation": "Migrate static assets to S3 with CloudFront CDN.",
+      "title": "Unstructured Data Storage",
+      "description": "README.md states assets are served from the app with no CDN - static and unstructured assets live on the application host local filesystem. No aws_s3_bucket resources, no S3 SDK usage and no document-parsing libraries exist.",
+      "gap": "Unstructured data sits on local EC2 filesystems: not durable, not shared across hosts, not independently accessible and coupled to instance lifecycle, which also blocks immutable containerized compute.",
+      "recommendation": "Move static assets and any uploaded documents to S3 with CloudFront in front, which simultaneously removes a blocker for stateless containerized compute. Add a parsing pipeline only if document extraction becomes a requirement.",
       "severity": "High",
       "priority": "P1",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "README.md",
@@ -570,17 +540,17 @@
       "category": "Data Platform",
       "category_display": "Data Platform Modernization",
       "category_id": "DATA",
-      "title": "Database access scattered in controllers with no pattern",
-      "description": "Mix of ActiveRecord and raw SQL (find_by_sql with string interpolation) directly in controllers. No repository/DAO pattern.",
-      "gap": "Database queries scattered across controllers with no abstraction layer.",
-      "recommendation": "Implement repository or service layer pattern. Eliminate raw SQL in controllers.",
+      "title": "Unified Data Access Layer",
+      "description": "Data access is scattered into the controller layer with no repository or DAO abstraction. OrdersController#index calls Order.find_by_sql with a hand-written SELECT * FROM orders WHERE status = '#{status}', bypassing the ORM, while show uses Order.find. The raw query interpolates params[:status] directly - a SQL-injection defect flagged in the source comment itself.",
+      "gap": "No single point of data contract; raw SQL mixed with ORM calls in HTTP handlers. This blocks schema evolution and has produced an active injection vulnerability.",
+      "recommendation": "Introduce an OrderRepository as the single data-access seam, and replace the interpolated find_by_sql with a bound-parameter query (Order.where(status: status)) as an immediate security fix independent of the broader refactor.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "app/controllers/orders_controller.rb",
-        "lines": null
+        "lines": "6-12, 25-27"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -594,10 +564,10 @@
       "category": "Data Platform",
       "category_display": "Data Platform Modernization",
       "category_id": "DATA",
-      "title": "MySQL 5.1 past end-of-life (EOL December 2018)",
-      "description": "MySQL 5.1 in use per README. EOL December 2018 with known unpatched CVEs. No version pinning in IaC (no IaC exists).",
-      "gap": "Database engine past EOL with no version management or upgrade path.",
-      "recommendation": "Migrate to RDS MySQL 8.0+ or Aurora MySQL 3.x.",
+      "title": "Database Engine Version and EOL",
+      "description": "README.md documents MySQL 5.1, long past end of life. The version appears only in prose - there is no IaC, no docker-compose.yml and no Helm values pinning the engine version, and config/ contains no database configuration at all.",
+      "gap": "An EOL engine receiving no security patches, with no version pinning mechanism and therefore no lifecycle management or upgrade procedure.",
+      "recommendation": "Migrate to a supported engine (RDS MySQL 8.0 or Aurora MySQL-Compatible), pin the engine version explicitly in IaC, and document the version-update procedure including downtime window and rollback.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -614,21 +584,45 @@
       }
     },
     {
+      "question_id": "DATA-Q4",
+      "category": "Data Platform",
+      "category_display": "Data Platform Modernization",
+      "category_id": "DATA",
+      "title": "Stored Procedures and Schema Complexity",
+      "description": "No stored procedures, triggers or proprietary SQL constructs were found - there are no .sql files, no migration directory and no CREATE PROCEDURE/TRIGGER/FUNCTION statements anywhere in the repo, and business logic including payment handling is in the application layer. The one qualifier is an ORM-bypass pattern: Order.find_by_sql with hand-written SQL in OrdersController#index.",
+      "gap": "No database-resident logic to extract, which keeps engine-migration effort low. The raw-SQL call site is the only database-coupling item to inventory before a version or engine change.",
+      "recommendation": "Replace the find_by_sql call with a parameterized ORM query so the data layer is engine-portable and the injection risk is removed. No stored-procedure extraction work is required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "app/controllers/orders_controller.rb",
+        "lines": "7-12"
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
       "question_id": "SEC-Q2",
       "category": "Security Baseline",
       "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "No encryption at rest for sensitive data",
-      "description": "No encryption at rest configured. MySQL on EC2 stores card numbers with no disk encryption or KMS.",
-      "gap": "No encryption at rest for sensitive data including payment card information.",
-      "recommendation": "Migrate to RDS/Aurora with KMS encryption. Adopt tokenization for card data.",
+      "title": "Encryption at Rest",
+      "description": "Surface gate passed (has_at_rest_data_surface=true - MySQL on EC2 plus locally served assets). No encryption at rest is configured or referenced: no aws_kms_key, no kms_key_id and no disk-encryption configuration. The data at rest includes order records whose fields are used for card capture (order.card_number, order.card_exp are read in charge_card).",
+      "gap": "No encryption at rest anywhere, on a data store that holds card data fields - a direct PCI-relevant exposure.",
+      "recommendation": "Enable encryption at rest with a customer-managed KMS key as part of the RDS/Aurora migration and on any S3 bucket created for assets, with a documented rotation policy. Separately, stop persisting raw card numbers - tokenize at the gateway so the PAN never reaches this database.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "app/controllers/orders_controller.rb",
-        "lines": null
+        "lines": "34"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -642,17 +636,17 @@
       "category": "Security Baseline",
       "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "No API authentication on endpoints",
-      "description": "No authentication. Controller comment states 'No before_filter auth on some actions (legacy oversight).'",
-      "gap": "No API authentication \u2014 endpoints are open.",
-      "recommendation": "Implement authentication using Cognito or external IdP with JWT/OAuth2.",
+      "title": "API Authentication",
+      "description": "The controller carries the comment 'No before_filter auth on some actions (legacy oversight)' and no before_filter or authentication guard is present on index, create or show. There is no token validation, no API Gateway authorizer and no Cognito integration, and show/index expose order records by ID or status with no authorization check.",
+      "gap": "Order endpoints - including order creation, which triggers a card charge - are reachable without per-request authentication or authorization, enabling direct object reference across customers.",
+      "recommendation": "Enforce authentication on every action and add per-record authorization on show. Front the API with API Gateway plus a JWT/OIDC authorizer, and adopt token-based auth rather than relying on the cookie session.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "app/controllers/orders_controller.rb",
-        "lines": null
+        "lines": "4-27"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -666,10 +660,10 @@
       "category": "Security Baseline",
       "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "No centralized identity integration",
-      "description": "No IdP integration. Cookie-based sessions with secret in source control.",
-      "gap": "Application manages its own authentication with no external IdP.",
-      "recommendation": "Integrate with Amazon Cognito or Okta for centralized identity.",
+      "title": "Centralized Identity Integration",
+      "description": "The application manages its own authentication entirely. README.md documents sessions stored in the cookie with the session secret in source control; there is no aws_cognito_* resource, no OIDC or SAML configuration and no federation or SSO setup anywhere in the repo.",
+      "gap": "Standalone self-managed auth with a compromised session secret and no external IdP integration - it cannot participate in unified access policy or centralized session revocation.",
+      "recommendation": "Federate to a centralized identity provider (Amazon Cognito, or the organization's existing Okta/Ping tenant) via OIDC, migrate to server-side or signed-and-rotated session handling, and rotate the leaked session secret immediately.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -690,17 +684,17 @@
       "category": "Security Baseline",
       "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "Plaintext credentials committed to source control",
-      "description": "Payment gateway credentials (merchant_id, api_password) in plaintext in config/payment.yml. Session secret also in source control.",
-      "gap": "Plaintext credentials in version-controlled configuration \u2014 critical security vulnerability.",
-      "recommendation": "Rotate credentials immediately. Migrate to AWS Secrets Manager with rotation. Purge from git history.",
+      "title": "Secrets Management",
+      "description": "Plaintext production credentials are committed to the repository. config/payment.yml contains merchant_id: ACME-MERCH-0042 and api_password with mode: live, loaded at runtime by YAML.load_file and passed to PaymentGateway.new. README.md independently confirms this and a session secret in source control. No Secrets Manager, Parameter Store or Vault usage exists. .gitignore excludes .env files, but that control is irrelevant because the credential lives in a tracked YAML file.",
+      "gap": "Live payment-gateway credentials are readable by anyone with repository access and are permanently present in git history. This is a deployment-blocking exposure, and no rotation mechanism exists.",
+      "recommendation": "Treat these credentials as compromised: rotate the gateway API password and session secret immediately with the provider. Move both into AWS Secrets Manager with automatic rotation, retrieve them at runtime via the instance/task role, remove config/payment.yml from the working tree and purge it from git history.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "config/payment.yml",
-        "lines": null
+        "lines": "2-5"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -714,16 +708,16 @@
       "category": "Security Baseline",
       "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "No compute hardening or patching strategy",
-      "description": "No patching strategy. EC2 runs EOL software with known CVEs. No SSM, no Inspector, no Dependabot.",
-      "gap": "No patching strategy \u2014 compute runs EOL software with known vulnerabilities.",
-      "recommendation": "Implement SSM Patch Manager and vulnerability scanning (Inspector or Snyk).",
+      "title": "Compute Hardening and Patching",
+      "description": "No patching or hardening evidence exists: no SSM agent configuration, no aws_ssm_patch_baseline, no Inspector or Snyk integration, no hardened base image reference, no EC2 Image Builder pipeline and no dependency-update automation (no .github/dependabot.yml, no renovate.json). The hosts run an EOL Ruby 1.8.7 / Rails 2.3 stack with known CVEs.",
+      "gap": "No patching strategy and no vulnerability scanning on compute running an unsupported runtime with documented CVEs, including mass-assignment.",
+      "recommendation": "Enroll the hosts in SSM Patch Manager and enable Amazon Inspector for OS and library CVE discovery in the interim. Add Dependabot or Renovate once Bundler is adopted, and move to hardened base images (or Bottlerocket/managed Fargate platform versions) as part of containerization.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
+        "file": ".github/dependabot.yml",
         "lines": null
       },
       "mod_metadata": {
@@ -738,17 +732,17 @@
       "category": "Security Baseline",
       "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "No application security pipeline",
-      "description": "No security scanning tools. No CI/CD pipeline to integrate scanning. Known SQL injection exists undetected.",
-      "gap": "No security scanning \u2014 no SAST, no dependency scanning, no container scanning.",
-      "recommendation": "Implement CI/CD first, then add SAST (Semgrep) and dependency scanning (Dependabot/Snyk).",
+      "title": "Application Security Pipeline",
+      "description": "There is no pipeline at all and therefore no security validation step: no SAST tool (SonarQube, Semgrep, CodeGuru Reviewer, Brakeman), no dependency scanning, no container scanning and no .snyk policy. The repository contains two exploitable defects routine scanning would surface - SQL injection via interpolated find_by_sql and mass assignment via Order.new(params[:order]) without attr_accessible.",
+      "gap": "Zero automated security validation, on a codebase with live unflagged injection and mass-assignment vulnerabilities.",
+      "recommendation": "Add Brakeman (Rails-specific SAST) and bundler-audit/Dependabot to the CI pipeline created under the Modern DevOps pathway, with a gate that blocks on critical findings, and add ECR image scanning once containerized. Fix the two identified defects immediately.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "app/controllers/orders_controller.rb",
-        "lines": null
+        "lines": "7-17"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -762,17 +756,17 @@
       "category": "Operations & Observability",
       "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "No distributed tracing",
-      "description": "No X-Ray, no OpenTelemetry, no trace ID propagation on external calls.",
-      "gap": "No distributed tracing \u2014 debugging cross-service failures requires log correlation.",
-      "recommendation": "Instrument with OpenTelemetry or X-Ray when rebuilding the application.",
+      "title": "Distributed Tracing",
+      "description": "No tracing instrumentation of any kind: no OpenTelemetry SDK, no X-Ray SDK or daemon configuration and no traceparent/X-Amzn-Trace-Id propagation. The outbound payment-gateway call in charge_card carries no correlation identifier.",
+      "gap": "No end-to-end visibility. Failures spanning the app tier, the MySQL host and the external payment gateway cannot be correlated, making the highest-risk path in the system effectively undebuggable.",
+      "recommendation": "Instrument with OpenTelemetry or the X-Ray SDK, propagate trace context into the payment-gateway call, and enable tracing at the ALB/API Gateway edge so the full request path is captured.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
-      "phase": 3,
+      "effort": "Medium",
+      "phase": 2,
       "evidence": {
         "file": "app/controllers/orders_controller.rb",
-        "lines": null
+        "lines": "29-35"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -786,16 +780,16 @@
       "category": "Operations & Observability",
       "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "No SLO definitions",
-      "description": "No SLOs defined. No monitoring artifacts, no CloudWatch alarms, no latency targets.",
-      "gap": "No SLOs \u2014 no formal definition of acceptable service levels.",
-      "recommendation": "Define SLOs for critical user journeys (order placement, checkout latency).",
+      "title": "SLO Definitions",
+      "description": "Surface gate passed (has_api_surface=true). No monitoring artifacts of any kind exist in the repo - no SLO definitions, no CloudWatch alarms (no IaC), no error-budget tracking and no dashboard definitions. Score 2 would require at least threshold-based latency or error-rate alarms; none are present.",
+      "gap": "No definition of acceptable service levels for a customer-facing storefront, and no in-repo monitoring artifacts from which implicit SLOs could be inferred.",
+      "recommendation": "Define SLOs for the order-placement and order-read journeys (availability and p99 latency), implement them as CloudWatch alarms and a service dashboard defined in IaC, and track error budgets. SLO tooling may exist in an external monitoring platform not visible in this repository.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
-        "file": "README.md",
+        "file": "config/",
         "lines": null
       },
       "mod_metadata": {
@@ -810,17 +804,17 @@
       "category": "Operations & Observability",
       "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "No business metrics instrumented",
-      "description": "No custom business metrics. No order count, conversion, or payment success rate tracking.",
-      "gap": "No business metrics \u2014 cannot measure order conversion or payment success rates.",
-      "recommendation": "Instrument business metrics (orders, payment success/failure, order value) with CloudWatch.",
+      "title": "Business Metrics",
+      "description": "No custom metrics are emitted. There is no put_metric_data call, no metrics client, no StatsD/Prometheus instrumentation and no dashboard definition. Business-critical events visibly occurring in code - order created, card charge succeeded or failed in charge_card - emit nothing.",
+      "gap": "No business-outcome telemetry. Payment failure rate and order conversion, the two metrics that matter most for a storefront, are unmeasured.",
+      "recommendation": "Emit custom CloudWatch metrics for order created, charge succeeded and charge failed (dimensioned by failure reason) and build a dashboard alongside the infrastructure metrics. These metrics also become the scaling signal recommended under INF-Q7.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "app/controllers/orders_controller.rb",
-        "lines": null
+        "lines": "14-35"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -834,16 +828,16 @@
       "category": "Operations & Observability",
       "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "No anomaly detection or alerting",
-      "description": "No CloudWatch alarms, no anomaly detection, no on-call integration. Failures discovered only when reported.",
-      "gap": "No alerting configured \u2014 failures discovered only reactively.",
-      "recommendation": "Implement CloudWatch alarms on error rates and latency. Integrate with PagerDuty/OpsGenie.",
+      "title": "Anomaly Detection and Alerting",
+      "description": "No alerting is configured. The repo contains no CloudWatch alarms, no anomaly detection, no composite alarms and no PagerDuty/OpsGenie integration, consistent with the complete absence of IaC. Failures are detected only when reported.",
+      "gap": "No alerting at all on error rates or latency, including on the payment path where a gateway outage would silently fail order charges.",
+      "recommendation": "Start with static alarms on 5xx rate, p99 latency and charge-failure rate, then layer CloudWatch anomaly detection on the critical order and payment paths. Route alarms to an on-call destination.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
-        "file": "README.md",
+        "file": "config/",
         "lines": null
       },
       "mod_metadata": {
@@ -858,10 +852,10 @@
       "category": "Operations & Observability",
       "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "No automated tests \u2014 stale test suite",
-      "description": "No working tests. README states tests are stale and no longer run. No test files in repo.",
-      "gap": "No automated tests \u2014 no safety net for changes, migrations, or deployments.",
-      "recommendation": "Build integration test suite for critical workflows as prerequisite for modernization.",
+      "title": "Integration Testing",
+      "description": "README.md states the Test::Unit suite no longer runs, and no test directory or test file is present in the repository at all. With no CI pipeline either, nothing is executed automatically.",
+      "gap": "No automated tests of any kind - unit or integration - and therefore no regression safety net for the runtime upgrade, database migration and decomposition work recommended above.",
+      "recommendation": "Restore a runnable suite, prioritizing integration coverage of the order-placement path (create, persist, charge with the gateway stubbed) and the order-read path. Wire it into the CI pipeline as a blocking gate before any modernization change lands.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -882,16 +876,16 @@
       "category": "Operations & Observability",
       "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "No observability ownership",
-      "description": "No dashboards, no alarms with owners, no CODEOWNERS for monitoring. Monitoring entirely absent.",
-      "gap": "No observability ownership \u2014 monitoring is non-existent.",
-      "recommendation": "Define per-service dashboards and alarms with named owners when implementing observability.",
+      "title": "Observability Ownership",
+      "description": "No ownership artifacts exist: no CODEOWNERS file, no per-service dashboard or alarm definitions, no SLO files with named owners and no team tags (there are no AWS resources defined in-repo to tag). The only ownership signal is a source comment noting the file was created 2008 and last edited 2014.",
+      "gap": "No named owner for monitoring assets and no observability assets to own; operations are reactive and unattributed.",
+      "recommendation": "Add a CODEOWNERS entry for the service, define its dashboard and alarms in IaC with an owner tag, and attribute the SLOs recommended in OPS-Q2 to a named team.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
-        "file": "README.md",
+        "file": "CODEOWNERS",
         "lines": null
       },
       "mod_metadata": {
@@ -909,15 +903,7 @@
       "title": "High Availability and Fault Isolation",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_deployed_workload=false \u2014 no deployed workload defined in this repo to evaluate HA for."
-    },
-    {
-      "question_id": "DATA-Q4",
-      "category_id": "DATA",
-      "title": "Stored Procedures and Schema Complexity",
-      "status": "pass",
-      "score": 4,
-      "reason": "Score 4 \u2014 no stored procedures, triggers, or proprietary SQL. All business logic in application layer."
+      "reason": "Surface-gated: has_deployed_workload=false. No Dockerfile with deployment manifests and no IaC defining compute, so no AZ topology is observable in-repo."
     },
     {
       "question_id": "SEC-Q1",
@@ -925,7 +911,7 @@
       "title": "Audit Logging",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_iac_provisioning_aws_resources=false \u2014 no IaC in repo; CloudTrail is account-level concern."
+      "reason": "Surface-gated: has_iac_provisioning_aws_resources=false and no account-level IaC scope. CloudTrail is an account-level concern belonging to the foundation infrastructure repo."
     },
     {
       "question_id": "OPS-Q5",
@@ -933,7 +919,7 @@
       "title": "Deployment Strategy",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_deployed_workload=false \u2014 no deployment artifacts in repo to assess strategy."
+      "reason": "Surface-gated: has_deployed_workload=false. No deployment artifacts in-repo; README.md describes a Capistrano 2 push but deployment orchestration is not committed here."
     },
     {
       "question_id": "OPS-Q7",
@@ -941,7 +927,7 @@
       "title": "Incident Response Automation",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_deployed_workload=false \u2014 no running system to define incident response for."
+      "reason": "Surface-gated: has_deployed_workload=false. There is no running system in this repo to define incident response automation for."
     },
     {
       "question_id": "OPS-Q9",
@@ -949,7 +935,7 @@
       "title": "Resource Tagging Governance",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_iac_provisioning_aws_resources=false \u2014 no AWS resources provisioned to tag."
+      "reason": "Surface-gated: has_iac_provisioning_aws_resources=false. The repo provisions no AWS resources, so there is nothing to tag."
     }
   ],
   "pathways": [
@@ -959,44 +945,54 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "High",
-      "key_trigger_criteria": "APP-Q2=1 (< 3) AND INF-Q1=1, APP-Q3=1, APP-Q4=1 (all < 3)",
+      "key_trigger_criteria": "Primary APP-Q2 < 3; at least one of INF-Q1 < 3, APP-Q3 < 3, APP-Q4 < 3 also true.",
       "triggering_questions": [
         {
           "question_id": "APP-Q2",
-          "score": 1
+          "score": 2,
+          "note": "Primary trigger - single deployable Rails monolith with shared schema and direct SQL from controllers"
         },
         {
           "question_id": "INF-Q1",
-          "score": 1
+          "score": 1,
+          "note": "Supporting - all compute on raw EC2"
         },
         {
           "question_id": "APP-Q3",
-          "score": 1
+          "score": 1,
+          "note": "Supporting - all communication synchronous, in-request SOAP payment call"
         },
         {
           "question_id": "APP-Q4",
-          "score": 1
+          "score": 1,
+          "note": "Supporting - no async job handling for variable-latency operations"
         }
       ],
       "detail": {
-        "current_state": "Tightly-coupled Rails 2.3 monolith on raw EC2 with synchronous-only communication",
-        "recommended_services": [
-          "Lambda",
+        "aws_services": [
           "API Gateway",
-          "Step Functions",
+          "ALB",
+          "ECS Fargate",
+          "Lambda",
+          "SQS",
           "EventBridge",
-          "ECS",
-          "EKS"
+          "Step Functions"
         ],
         "patterns": [
           "Strangler Fig",
           "Anti-corruption Layer",
+          "Saga",
+          "Event Sourcing",
           "Hexagonal Architecture"
         ],
         "immediate_actions": [
-          "Identify service boundaries",
-          "Plan re-platform approach",
-          "Build integration tests first"
+          "Extract the payment integration behind an Anti-corruption Layer",
+          "Move the card charge out of the synchronous request path",
+          "Introduce a saga with a compensating void/refund step"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/CMK2J48MVN",
+          "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html"
         ]
       }
     },
@@ -1006,27 +1002,31 @@
       "status": "Triggered",
       "priority": "Medium",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q1=1 (< 3) AND no container definitions found in discovery",
+      "key_trigger_criteria": "INF-Q1 < 3 AND no container definitions found. Compute is EC2/VM-based so the already-on-Lambda/Fargate/ECS guard does not apply.",
       "triggering_questions": [
         {
           "question_id": "INF-Q1",
-          "score": 1
+          "score": 1,
+          "note": "Primary trigger - Mongrel behind Apache on fixed EC2 hosts; no Dockerfile, compose file or Kubernetes manifests anywhere in the repo"
         }
       ],
       "detail": {
-        "current_state": "Mongrel on EC2 with no containerization",
-        "recommended_services": [
-          "ECS",
-          "Fargate",
+        "aws_services": [
           "ECR",
+          "ECS on Fargate",
+          "EKS",
           "App Runner"
         ],
-        "prerequisite": "Ruby/Rails stack upgrade required before containerization \u2014 Ruby 1.8.7 not supported by modern base images",
-        "immediate_actions": [
-          "Upgrade Ruby/Rails stack",
-          "Adopt Bundler",
-          "Create Dockerfile",
-          "Set up ECR"
+        "prerequisites": [
+          "Adopt Bundler with a resolvable Gemfile.lock, replacing environment.rb gem pins",
+          "Move to a Rack-compatible server (Puma)",
+          "Externalize config/payment.yml to environment variables sourced from Secrets Manager"
+        ],
+        "migration_approach": "Refactor-then-containerize. A straight lift would freeze an EOL Ruby 1.8.7 / Rails 2.3 runtime into an unpatchable image.",
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/GNYBZ9X9EM",
+          "https://skillbuilder.aws/learning-plan/CDA8Y4JRRR",
+          "https://www.eksworkshop.com/"
         ]
       }
     },
@@ -1036,16 +1036,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures or proprietary SQL); MySQL is already open source",
+      "key_trigger_criteria": "DATA-Q4 < 3 AND commercial DB engines detected in the INF-Q2 finding.",
       "triggering_questions": [
         {
           "question_id": "DATA-Q4",
-          "score": 4,
-          "note": "DATA-Q4=4 meets threshold; no proprietary SQL lock-in"
+          "score": 3,
+          "note": "DATA-Q4 = 3 meets threshold - no stored procedures, triggers or proprietary SQL"
         }
       ],
-      "detail": null,
-      "not_triggered_reason": "DATA-Q4=4 (no stored procedures) does not meet < 3 threshold. MySQL is already open-source; no commercial DB engine detected."
+      "not_triggered_reason": "DATA-Q4 = 3 (at threshold) and no commercial database engine was detected; the engine is MySQL, which is already open source.",
+      "detail": null
     },
     {
       "id": "move-to-managed-databases",
@@ -1053,32 +1053,38 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q2=1 (< 3); DATA-Q3=1 (< 3) strengthens case",
+      "key_trigger_criteria": "Primary INF-Q2 < 3; DATA-Q3 < 3 strengthens.",
       "triggering_questions": [
         {
           "question_id": "INF-Q2",
-          "score": 1
+          "score": 1,
+          "note": "Primary trigger - MySQL 5.1 self-managed on a separate EC2 instance"
         },
         {
           "question_id": "DATA-Q3",
-          "score": 1
+          "score": 1,
+          "note": "Supporting - engine at EOL and version not pinned in any IaC"
         }
       ],
       "detail": {
-        "current_state": "Self-managed MySQL 5.1 on EC2 (EOL December 2018)",
-        "recommended_services": [
-          "Aurora MySQL",
-          "RDS MySQL",
-          "DMS"
+        "aws_services": [
+          "Amazon RDS for MySQL 8.0",
+          "Aurora MySQL-Compatible",
+          "AWS Backup",
+          "AWS KMS"
         ],
         "migration_tools": [
-          "AWS Database Migration Service",
-          "MySQL native replication for cutover"
+          "AWS Schema Conversion Tool",
+          "AWS Database Migration Service"
         ],
         "immediate_actions": [
-          "Assess schema compatibility with MySQL 8.0",
-          "Plan DMS migration",
-          "Test with RDS MySQL 8.0"
+          "Enable Multi-AZ, automated backups and PITR at creation",
+          "Enable encryption at rest with a customer-managed KMS key",
+          "Replace the interpolated find_by_sql call site with a bound-parameter query before cutover"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC",
+          "https://skillbuilder.aws/learn/ND246G8Y3W"
         ]
       }
     },
@@ -1088,16 +1094,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "No data processing workloads exist \u2014 contextual guard blocks trigger",
+      "key_trigger_criteria": "INF-Q4 < 3 AND evidence of data processing workloads must exist.",
       "triggering_questions": [
         {
           "question_id": "INF-Q4",
           "score": 1,
-          "note": "INF-Q4=1 but no data processing workloads detected; contextual guard blocks"
+          "note": "Primary condition met but blocked by the contextual guard"
         }
       ],
-      "detail": null,
-      "not_triggered_reason": "No streaming, ETL, data pipeline, or analytics artifacts found during discovery. Application is a simple CRUD storefront with no data processing responsibilities."
+      "not_triggered_reason": "Contextual guard: no streaming, ETL, data-pipeline or analytics artifacts exist anywhere in the repo. This is a transactional storefront with no data-processing workload.",
+      "detail": null
     },
     {
       "id": "move-to-modern-devops",
@@ -1105,35 +1111,44 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q10=1 (< 3) AND INF-Q11=1 (< 3); OPS-Q6=1 strengthens",
+      "key_trigger_criteria": "INF-Q10 < 3 OR INF-Q11 < 3; OPS-Q5 < 3 and OPS-Q6 < 3 strengthen.",
       "triggering_questions": [
         {
           "question_id": "INF-Q10",
-          "score": 1
+          "score": 1,
+          "note": "Primary trigger - zero IaC coverage"
         },
         {
           "question_id": "INF-Q11",
-          "score": 1
+          "score": 1,
+          "note": "Primary trigger - no pipeline; manual Capistrano 2 push"
         },
         {
           "question_id": "OPS-Q6",
-          "score": 1
+          "score": 1,
+          "note": "Supporting - Test::Unit suite no longer runs; no tests in repo"
         }
       ],
       "detail": {
-        "current_state": "Zero IaC, manual Capistrano deployment, no working tests",
-        "recommended_services": [
+        "aws_services": [
           "CodeBuild",
           "CodePipeline",
           "CodeDeploy",
           "CloudFormation",
           "CDK",
+          "CodeGuru Reviewer",
           "CloudWatch"
         ],
         "immediate_actions": [
-          "Define target infrastructure in Terraform/CDK",
-          "Set up CI/CD pipeline",
-          "Write integration tests for critical workflows"
+          "Restore a runnable test suite covering the order-placement path",
+          "Add a CI pipeline with test, build, SAST and dependency scanning",
+          "Codify the existing EC2/MySQL/network footprint in IaC before changing it",
+          "Replace the Capistrano push with an automated deploy stage"
+        ],
+        "note": "OPS-Q5 was Not Evaluated (surface-gated) and does not count toward triggering.",
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
+          "https://skillbuilder.aws/learn/R4B13K95YQ"
         ]
       }
     },
@@ -1143,25 +1158,67 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "No AI/agent intent evidenced in the repository",
+      "key_trigger_criteria": "No AI/agent frameworks, vector DB, RAG or agent eval framework, gated on AI/agent/LLM intent evidenced in the repository.",
       "triggering_questions": [],
-      "detail": null,
-      "not_triggered_reason": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)."
+      "not_triggered_reason": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation).",
+      "detail": null
     }
   ],
-  "filter_vocab": {
-    "categories": [
-      "Infrastructure & DevOps",
-      "Application Architecture",
-      "Data Platform",
-      "Security Baseline",
-      "Operations & Observability"
+  "decomposition_strategy": {
+    "triggered_by": {
+      "question_id": "APP-Q2",
+      "score": 2
+    },
+    "recommended_approach": "Strangler Fig (Parallel Track)",
+    "calibrated_effort": "High",
+    "effort_rationale": "Extraction itself is moderate for a monolith this size, but prerequisites must land first: restore a runnable test suite, replace environment.rb gem pins with Bundler, move off Mongrel, and build a pipeline.",
+    "approach_options": [
+      {
+        "approach": "Strengthen as Modular Monolith",
+        "fit": "Partial",
+        "effort": "Low",
+        "recommendation": "Useful as a concurrent hygiene track, not sufficient alone - it does not address the EOL runtime, EOL database engine, or absent pipeline."
+      },
+      {
+        "approach": "Strangler Fig (Parallel Track)",
+        "fit": "Best",
+        "effort": "Medium to High",
+        "recommendation": "Recommended. Extract the payment charge first behind an Anti-corruption Layer; the monolith keeps serving traffic throughout."
+      },
+      {
+        "approach": "Conditional / Adaptive",
+        "fit": "Viable fallback",
+        "effort": "Low to Medium",
+        "recommendation": "Acceptable when capacity is constrained: containerize after the Bundler/Puma prerequisites, then extract only payments and order search."
+      },
+      {
+        "approach": "Big-Bang Rewrite",
+        "fit": "Poor",
+        "effort": "Very High",
+        "recommendation": "Recommended against - the monolith is small and functional, so incremental extraction is clearly possible."
+      }
     ],
-    "severities": [
-      "High",
-      "Medium",
-      "Low"
+    "patterns": [
+      {
+        "pattern": "Anti-corruption Layer",
+        "why": "Keeps the Rails 2.3 Order schema and its mass-assignment semantics out of extracted services.",
+        "guidance": "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/strangler-fig.html"
+      },
+      {
+        "pattern": "Saga",
+        "why": "Once the payment charge leaves the request path, order creation and card capture are no longer one transaction; a compensating refund/void step is required.",
+        "guidance": "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/saga.html"
+      },
+      {
+        "pattern": "Event Sourcing",
+        "why": "Order state transitions are audit-relevant for a payment-handling storefront.",
+        "guidance": "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/event-sourcing.html"
+      },
+      {
+        "pattern": "Hexagonal Architecture",
+        "why": "The controller binds HTTP, SQL and the gateway SOAP client together; ports-and-adapters is the structural fix for each extracted service.",
+        "guidance": "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html"
+      }
     ]
-  },
-  "repo_name": "legacy-storefront-rails"
+  }
 }

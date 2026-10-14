@@ -223,6 +223,56 @@ BLOCKS = {
 PROMPT = {"ara": RUBRIC / "ara-scorer-prompt.md", "mod": RUBRIC / "mod-scorer-prompt.md"}
 LOCK = {"ara": RUBRIC / "ara-scorer-facts.lock.json", "mod": RUBRIC / "mod-scorer-facts.lock.json"}
 
+# ‼ THE PORTFOLIO PAIR IS CHECKED SEPARATELY, AND IT WAS NOT CHECKED AT ALL UNTIL NOW.
+# `run()` iterated ("ara", "mod") only, so the two portfolio prompts and their lock files were
+# never read by this script -- the locks sat on disk carrying `"fingerprint": "stub-v1-2026-08-18"`
+# and a hand-typed `programs` list of THREE names while the library held forty. The job passed on
+# every program-library edit for about eight weeks, including the one that added FORGE, because it
+# was reporting truthfully about the only two files it knew about.
+#
+# The portfolio prompts bake in the full program candidate set by contract (the grader reads no TD
+# file at runtime), so the one fact that must not drift is: every program in the library appears in
+# the prompt. That is derived from the library below, not re-typed here -- a hand-maintained list
+# is what failed the first time.
+PORTFOLIO_PROMPT = {
+    "portfolio-ara": RUBRIC / "portfolio-ara-scorer-prompt.md",
+    "portfolio-mod": RUBRIC / "portfolio-mod-scorer-prompt.md",
+}
+PORTFOLIO_LOCK = {
+    "portfolio-ara": RUBRIC / "portfolio-ara-scorer-facts.lock.json",
+    "portfolio-mod": RUBRIC / "portfolio-mod-scorer-facts.lock.json",
+}
+# Both managed portfolio TDs carry a byte-identical copy of the library (enforced by
+# test_program_library_copies.py); read the ARA one and let that test police the pair.
+PROGRAM_LIBRARY = (HARNESS.parent / "definitions" / "managed"
+                   / "portfolio-agentic-readiness-analysis" / "references" / "program-library.md")
+# A program heading is `### <name> `[TAG]` `<Status>``. Section headings ("## TIER 2: ...",
+# "### Status Key") carry no tag, which is what distinguishes them.
+_PROGRAM_RE = re.compile(r"^### (?P<name>.+?)\s+`\[(?P<tag>[^\]]+)\]`\s+`(?P<status>\w+)`\s*$",
+                         re.M)
+
+
+def derive_programs() -> dict[str, dict[str, str]]:
+    """{name: {tag, status}} for every tagged program in the library."""
+    text = PROGRAM_LIBRARY.read_text()
+    out = {m.group("name").strip(): {"tag": m.group("tag"), "status": m.group("status")}
+           for m in _PROGRAM_RE.finditer(text)}
+    if not out:
+        raise SystemExit(f"scorer-prompt-sync: parsed 0 programs from {PROGRAM_LIBRARY} -- "
+                         "the heading format changed; fix _PROGRAM_RE rather than shipping "
+                         "a check that silently passes on an empty set.")
+    return out
+
+
+def portfolio_facts() -> dict:
+    return {"programs": derive_programs(), "program_count": len(derive_programs())}
+
+
+def missing_programs(prompt_path: Path, programs: dict) -> list[str]:
+    """Program names the library defines and the prompt never mentions."""
+    text = prompt_path.read_text()
+    return [n for n in programs if n not in text]
+
 
 # ---------------------------------------------------------------------------------------
 # GEN marker plumbing.  <!-- GEN:name --> ... <!-- /GEN:name -->
@@ -343,11 +393,69 @@ def run(write: bool) -> int:
             if not stale and not lock_changed:
                 print(f"[{tag}] in sync — no re-publish needed")
 
+    problems += run_portfolio(write)
+
     if not write and problems:
         print(f"\n{problems} drift issue(s). The external scorer prompt(s) no longer match "
               f"the TD.")
         return 1
     return 0
+
+
+def run_portfolio(write: bool) -> int:
+    """Check the two portfolio prompts against the program library.
+
+    Separate from run()'s loop because the portfolio prompts have no GEN blocks and no
+    question catalog -- the fact they bake in is the program candidate set.
+    """
+    problems = 0
+    facts = portfolio_facts()
+    programs = facts["programs"]
+
+    for analysis, prompt_path in PORTFOLIO_PROMPT.items():
+        lock_path = PORTFOLIO_LOCK[analysis]
+        tag = analysis.upper()
+
+        missing = missing_programs(prompt_path, programs)
+        committed = json.loads(lock_path.read_text()) if lock_path.exists() else None
+        lock_changed = committed is None or committed.get("facts") != facts
+
+        if write:
+            if lock_changed:
+                lock_path.write_text(_canonical(lock_payload(analysis, facts)) + "\n")
+                print(f"[{tag}] rewrote facts-lock {lock_path.name}")
+                if committed is not None:
+                    for line in _diff(committed.get("facts", {}), facts):
+                        print(line)
+            # A missing program needs a human: the row's "surface when" is an editorial
+            # summary of the library's Signal patterns, so --write must not invent one.
+            if missing:
+                problems += 1
+                print(f"[{tag}] !! {len(missing)} program(s) absent from {prompt_path.name} — "
+                      f"ADD THEM BY HAND (--write cannot write a 'surface when' for you): "
+                      f"{', '.join(missing)}")
+            elif not lock_changed:
+                print(f"[{tag}] already in sync")
+        else:
+            if missing:
+                problems += 1
+                print(f"[{tag}] {len(missing)} program(s) in the library are MISSING from "
+                      f"{prompt_path.name}: {', '.join(missing)}")
+                print(f"       The prompt is self-contained by contract, so a program it does "
+                      f"not list is one the grader will score as a defect when the TD "
+                      f"correctly recommends it. Add a row, then re-publish the scorer.")
+            if lock_changed:
+                problems += 1
+                if committed is None:
+                    print(f"[{tag}] no facts-lock yet ({lock_path.name}) — run --write")
+                else:
+                    print(f"[{tag}] program library drifted from {lock_path.name} — "
+                          f"re-generate and RE-PUBLISH the Benchmark scorer. Changed:")
+                    for line in _diff(committed.get("facts", {}), facts):
+                        print(line)
+            if not missing and not lock_changed:
+                print(f"[{tag}] in sync — no re-publish needed")
+    return problems
 
 
 def main(argv: list[str] | None = None) -> int:

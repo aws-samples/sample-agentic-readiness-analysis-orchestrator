@@ -67,7 +67,7 @@ The Portfolio ARA JSON artifact MUST emit these top-level keys in the order show
 | `findings[]` | Per-repo findings propagated up. Each entry is a 12-field per-repo finding plus `repo_name`. One entry per (repo × question_id). Used by webapp Findings tab. |
 | `cross_cutting_findings[]` | Portfolio-aggregated findings where the same question_id fires at the same tier across 2+ repos (BLOCKER) or meets the scaling threshold (RISK, max(3, 33% of applicable repos)). One entry per question_id. Used by webapp Cross-Cutting view. |
 | `remediation_roadmap` | See §"Remediation Roadmap" below |
-| `recommended_actions[]` | Canonical agentic programs (AI DLC, AXE, Innovation EBA) |
+| `recommended_actions[]` | Canonical agentic programs (AI DLC, AXE, Innovation EBA, FORGE) |
 | `portfolio_level_findings[]` | PORT-ARA-Q* cross-portfolio findings |
 | `dependency_map` | Dependency map |
 
@@ -220,6 +220,7 @@ The Portfolio ARA JSON emits `recommended_actions[]` as an array of agentic-prog
 | `ai-dlc` | AI Driven Development Lifecycle | AI DLC | workshop |
 | `axe` | Agent Experience Engagement | AXE | program |
 | `innovation-eba` | Innovation EBA | Innovation EBA | program |
+| `forge` | FORGE Data Platform Readiness Assessment | FORGE | program |
 
 Each entry carries:
 
@@ -261,7 +262,7 @@ Subsections:
 1. **Portfolio Status** — "Out of {N} repositories analyzed, {A} are agent-ready and can integrate with AI agents immediately, {B} are pilot-ready for read-only operations, and {C} require remediation before agent deployment. The analysis identified {H} high severity findings (blockers) and {M} medium severity findings (risks)."
 2. **Key Findings** — Top 3 cross-cutting high severity areas as bullet list with repo counts
 3. **Remediation Plan** — 3-phase numbered list with finding counts and timelines
-4. **Recommended Actions** — Bullet list of triggered programs (AI DLC, AXE, Innovation EBA) with reasons
+4. **Recommended Actions** — Bullet list of triggered programs (AI DLC, AXE, Innovation EBA, FORGE) with reasons
 
 **Stats Card Row** (4 cards):
 
@@ -317,7 +318,7 @@ Source: `remediation_roadmap.items[]` grouped by phase
 Table columns: `Program`, `Description`, `Why Recommended`, `Duration`
 
 - Source: `recommended_actions[]` filtered to `status == "Triggered"`
-- Canonical programs: AI DLC, AXE, Innovation EBA
+- Canonical programs: AI DLC, AXE, Innovation EBA, FORGE
 
 #### Footer
 

@@ -4,12 +4,12 @@
   for floating an idea, gathering agreement, or flagging a gap you noticed.
 
   FIRST decide what KIND of defect this is (§0). It decides who fixes it, which label
-  it gets, where the fix lives, and whether an Benchmark re-publish is owed. The most
+  it gets, where the fix lives, and whether a scorer re-publish is owed. The most
   common mistake is filing a *judge* artifact as a *TD* bug: before concluding the TD
   is wrong, confirm the report's own recorded scope / surface_flags don't ALREADY
   justify the output (§1). Real example — a "fabricated" deployment finding was
   actually correct because has_deployed_workload=true; the judge, not the TD, was
-  wrong (#9).
+  wrong (the judge/scorer calibration issue).
 
   Background: TDs live in definitions/managed/<td>/ (SKILL.md + references/), directly
   editable here; the external scorer prompts are harness/rubric/*-scorer-prompt.md.
@@ -28,7 +28,7 @@
      - question_id(s):              e.g. DATA-Q1
      - The report's OWN recorded scope / surface_flags for that question — does anything
        there already justify the current output? If YES, this is a ~judge issue (§0),
-       NOT a TD bug. (This is the check that would have caught #9.)
+       NOT a TD bug. (This is the check that would have caught the judge/scorer calibration issue.)
      - TD file:line the rule lives at, or is missing from:  e.g. mod/references/01-question-bank.md:578
      - Reproducibility: does it survive re-rolls (a DETERMINISTIC defect) or is it a
        single draw (WITHIN-NOISE)? The rebaseline digest separates these — cite which. -->

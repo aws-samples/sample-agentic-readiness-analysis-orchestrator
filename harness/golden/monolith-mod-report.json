@@ -1,18 +1,21 @@
 {
   "analysis_type": "mod",
+  "repo_name": "monolith",
+  "overall_score": 2.06,
   "metadata": {
-    "repository": "monolith",
-    "analysis_date": "2026-08-21",
+    "analysis_type": "mod",
+    "analysis_date": "2026-10-13",
     "td_version": "modernization-readiness-analysis",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Application source code with deployable entry point (index.php with 25+ HTTP API endpoints), Dockerfile, and CloudFormation IaC provisioning AWS resources. Single service with full-stack deployment.",
+    "repo_type_justification": "Application source with a deployable entry point (index.php served by Apache) plus a Dockerfile and single-service AWS IaC (infrastructure/monolith-apprunner.yaml). No sibling service directories and no library packaging manifest.",
     "service_archetype": "stateful-crud",
-    "archetype_source": "auto-detected",
-    "archetype_justification": "Database connections (MySQL/PDO) with CRUD operations across 9 tables, write endpoints (POST/PUT/DELETE), and owned persistent state. No downstream service fan-out or event consumption.",
+    "service_archetype_source": "auto-detected",
+    "archetype_justification": "Owns persistent MySQL state (9 CREATE TABLE definitions in index.php) and exposes write endpoints (POST /api/orders, POST /api/returns, POST/PUT /api/admin/users) alongside reads, with user-specific session context. No queue consumers and no multi-service workflow coordination across external services.",
     "priority": null,
     "tags": [],
     "context": null,
+    "preferences": null,
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_at_rest_data_surface": true,
@@ -20,1120 +23,441 @@
       "has_api_surface": true,
       "has_multi_instance_deployment": true,
       "has_iac_provisioning_aws_resources": true
-    }
+    },
+    "surface_flag_rationale": "RDS MySQL plus a docker-compose MySQL establish a persistent/at-rest surface; AWS::AppRunner::Service and the Dockerfile establish a deployed workload; /api/* routes establish an API surface; AppRunner AutoScalingConfiguration (Min 1 / Max 3) establishes multi-instance deployment; the CloudFormation template provisions AWS resources. The IaC is application-level only (no CloudTrail/Config/GuardDuty/Organizations), so SEC-Q1 is Not Evaluated.",
+    "language": "PHP 8.2",
+    "lines_of_code": 3192,
+    "framework": "None (raw PHP, no Composer manifest)"
   },
-  "overall_score": 1.83,
   "classification": {
     "tier": "Remediation Required",
-    "high_count": 6,
+    "high_count": 4,
     "medium_count": 20,
-    "low_count": 6,
-    "rule_matched": "2-11 High \u2192 Remediation Required",
+    "low_count": 8,
+    "rule_matched": "2-11 High → Remediation Required",
     "classification_consistency_check": "consistent"
   },
   "categories": [
-    {
-      "category_id": "INF",
-      "category": "Infrastructure & DevOps",
-      "category_display": "Infrastructure, Platform, and DevOps",
-      "numeric_score": 2.55,
-      "score_rating": "Partial",
-      "severity_status": "Critical"
-    },
-    {
-      "category_id": "APP",
-      "category": "Application Architecture",
-      "category_display": "Application Architecture",
-      "numeric_score": 1.33,
-      "score_rating": "Not Ready",
-      "severity_status": "Critical"
-    },
-    {
-      "category_id": "DATA",
-      "category": "Data Platform",
-      "category_display": "Data Platform Modernization",
-      "numeric_score": 2.5,
-      "score_rating": "Partial",
-      "severity_status": "Critical"
-    },
-    {
-      "category_id": "SEC",
-      "category": "Security Baseline",
-      "category_display": "Security Baseline",
-      "numeric_score": 1.67,
-      "score_rating": "Needs Work",
-      "severity_status": "Critical"
-    },
-    {
-      "category_id": "OPS",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "numeric_score": 1.11,
-      "score_rating": "Not Ready",
-      "severity_status": "Critical"
-    }
+    {"category_id": "INF", "category": "Infrastructure & DevOps", "category_display": "Infrastructure, Platform, and DevOps", "numeric_score": 2.73, "score_rating": "Partial", "severity_status": "Critical"},
+    {"category_id": "APP", "category": "Application Architecture", "category_display": "Application Architecture", "numeric_score": 1.33, "score_rating": "Not Ready", "severity_status": "Critical"},
+    {"category_id": "DATA", "category": "Data Platform", "category_display": "Data Platform Modernization", "numeric_score": 3.00, "score_rating": "Partial", "severity_status": "Needs Work"},
+    {"category_id": "SEC", "category": "Security Baseline", "category_display": "Security Baseline", "numeric_score": 2.00, "score_rating": "Needs Work", "severity_status": "Critical"},
+    {"category_id": "OPS", "category": "Operations & Observability", "category_display": "Operations & Observability", "numeric_score": 1.22, "score_rating": "Not Ready", "severity_status": "Critical"}
   ],
   "top_gaps": [
-    {
-      "question_id": "APP-Q2",
-      "title": "Monolith vs Microservices",
-      "score": 1,
-      "gap": "Tightly-coupled monolith \u2014 single 3193-line PHP file with all business domains, no module boundaries, pervasive shared state",
-      "impact": "Blocks independent scaling, deployment autonomy, and team velocity; triggers Move to Cloud Native pathway"
-    },
-    {
-      "question_id": "INF-Q11",
-      "title": "CI/CD Automation",
-      "score": 1,
-      "gap": "No CI/CD pipeline \u2014 deployment is a manual bash script",
-      "impact": "Prevents continuous delivery, increases deployment risk, blocks safe modernization; triggers Move to Modern DevOps pathway"
-    },
-    {
-      "question_id": "SEC-Q5",
-      "title": "Secrets Management",
-      "score": 1,
-      "gap": "Hardcoded database password fallback in source code, no Secrets Manager, no rotation",
-      "impact": "Security vulnerability; plaintext credentials in source expose system to unauthorized access"
-    },
-    {
-      "question_id": "OPS-Q5",
-      "title": "Deployment Strategy",
-      "score": 1,
-      "gap": "Manual docker-compose deployment with no staged rollout",
-      "impact": "Every deployment is all-or-nothing with no rollback capability; maximum blast radius"
-    },
-    {
-      "question_id": "OPS-Q6",
-      "title": "Integration Testing",
-      "score": 1,
-      "gap": "No automated tests of any kind",
-      "impact": "No safety net for changes; regression risk during any modernization effort"
-    }
+    {"question_id": "APP-Q2", "title": "Monolith vs Microservices", "score": 1, "gap": "All seven business domains in one 3,192-line index.php sharing a single MySQL schema with no module boundaries.", "impact": "Blocks independent scaling, deployment, and ownership; triggers Move to Cloud Native."},
+    {"question_id": "INF-Q11", "title": "CI/CD Automation", "score": 1, "gap": "No pipeline of any kind; deploy.sh runs docker-compose locally and the template documents manual update-stack steps.", "impact": "No repeatable path to production; triggers Move to Modern DevOps."},
+    {"question_id": "SEC-Q5", "title": "Secrets Management", "score": 1, "gap": "Hardcoded DB password fallback 'ecommerce_pass' in index.php:18; RDS password injected as a plaintext App Runner environment variable; no Secrets Manager, no rotation.", "impact": "Credential exposure in source and service configuration."},
+    {"question_id": "OPS-Q6", "title": "Integration Testing", "score": 1, "gap": "No test files, no test framework, no CI test stage anywhere in the repository.", "impact": "No regression safety net, making decomposition materially riskier."},
+    {"question_id": "APP-Q3", "title": "Async vs Sync Communication", "score": 1, "gap": "Every fulfillment state transition is a synchronous in-request MySQL write; no queues, topics, or event emission exist.", "impact": "No decoupling seam for extraction; supporting trigger for Move to Cloud Native."}
   ],
   "findings": [
     {
-      "question_id": "INF-Q3",
-      "category": "Infrastructure & DevOps",
-      "category_display": "Infrastructure, Platform, and DevOps",
-      "category_id": "INF",
-      "title": "No Workflow Orchestration",
-      "description": "The order fulfillment workflow (validate \u2192 assign warehouse \u2192 pick \u2192 pack \u2192 quality check \u2192 ship \u2192 deliver) is entirely hardcoded in index.php as sequential route handlers with no orchestration, retry logic, or error handling strategy.",
-      "gap": "No workflow orchestration \u2014 all multi-step business logic hardcoded in application code with no dedicated orchestration service.",
-      "recommendation": "Adopt AWS Step Functions for the order fulfillment workflow. Each fulfillment step maps naturally to a Step Functions state with built-in retry logic and error handling.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "High",
-      "phase": 3,
-      "evidence": {
-        "file": "index.php",
-        "lines": "1049-1212"
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": true,
-        "core_question": false
-      }
+      "question_id": "INF-Q3", "category": "Infrastructure & DevOps", "category_display": "Infrastructure, Platform, and DevOps", "category_id": "INF",
+      "title": "Workflow Orchestration", "description": "An eight-step order fulfillment workflow (validate, assign-warehouse, pick, pack, quality-check, ship, deliver, confirm-delivery) is entirely hardcoded as independent HTTP handlers calling update_order_status() with literal next-state strings. No Step Functions state machine, Temporal/Camunda SDK, or state-machine abstraction exists.",
+      "gap": "No dedicated workflow orchestration: retries, timeouts, compensations, and transition validity are implicit in handler code, with no visibility into in-flight orders.",
+      "recommendation": "Model the order lifecycle as an AWS Step Functions state machine with the existing endpoints as task actions, defined in the CloudFormation template so retry/catch semantics and execution history are declarative.",
+      "severity": "Medium", "priority": "P2", "effort": "Medium", "phase": 2,
+      "evidence": {"file": "index.php", "lines": "238-248, 1050-1243"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": true, "core_question": false}
     },
     {
-      "question_id": "INF-Q4",
-      "category": "Infrastructure & DevOps",
-      "category_display": "Infrastructure, Platform, and DevOps",
-      "category_id": "INF",
-      "title": "No Async Messaging Infrastructure",
-      "description": "No messaging or streaming infrastructure exists. All state changes happen synchronously within HTTP request-response cycles. For a stateful-crud service, the absence of messaging means tight coupling between domains.",
-      "gap": "No messaging where state changes cross domain boundaries \u2014 tight synchronous coupling between order management, inventory, payments, and fulfillment.",
-      "recommendation": "Introduce Amazon EventBridge or SQS for domain event publishing. Order status changes should emit events consumed by notifications, analytics, and audit without blocking the primary request.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "index.php",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": true,
-        "core_question": false
-      }
+      "question_id": "INF-Q4", "category": "Infrastructure & DevOps", "category_display": "Infrastructure, Platform, and DevOps", "category_id": "INF",
+      "title": "Async Messaging and Streaming", "description": "No messaging or streaming infrastructure of any kind: no SQS, SNS, EventBridge, Kinesis, MSK, or Amazon MQ in IaC, and no messaging client at runtime (the Dockerfile installs only pdo and pdo_mysql). No self-managed broker either. Cross-domain state changes (inventory decrement, payment capture, return restock) are in-process MySQL writes.",
+      "gap": "No managed messaging substrate exists, so every cross-domain effect is an in-request write. This is a hard prerequisite for the Move to Cloud Native pathway.",
+      "recommendation": "Introduce Amazon EventBridge as the event backbone and publish domain events (OrderPlaced, OrderShipped, ReturnApproved) with SQS-backed consumers, inside the monolith first so extracted services later subscribe to an existing stream.",
+      "severity": "Medium", "priority": "P2", "effort": "Medium", "phase": 2,
+      "evidence": {"file": "infrastructure/monolith-apprunner.yaml", "lines": null},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": true, "core_question": false}
     },
     {
-      "question_id": "INF-Q5",
-      "category": "Infrastructure & DevOps",
-      "category_display": "Infrastructure, Platform, and DevOps",
-      "category_id": "INF",
-      "title": "Network Security Missing VPC Endpoints",
-      "description": "Services deployed in custom VPC with private subnets and least-privilege security groups. VPC Flow Logs enabled. No VPC endpoints or PrivateLink for AWS service connectivity.",
-      "gap": "No VPC endpoints or PrivateLink \u2014 outbound HTTPS (0.0.0.0/0:443) used for AWS API calls rather than private connectivity.",
-      "recommendation": "Add VPC endpoints for ECR, CloudWatch Logs, and other AWS services to eliminate internet-routed traffic.",
-      "severity": "Low",
-      "priority": "P1",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 3,
-        "score_label": "Partial",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
+      "question_id": "INF-Q5", "category": "Infrastructure & DevOps", "category_display": "Infrastructure, Platform, and DevOps", "category_id": "INF",
+      "title": "Network Security", "description": "A dedicated VPC (10.0.0.0/16) with two private subnets across two AZs, no public subnet or IGW, security-group-referenced RDS ingress on port 3307, PubliclyAccessible false, VPC flow logs to a KMS-encrypted log group, and a WAFv2 Web ACL with DefaultAction Block and an IP allowlist. The only 0.0.0.0/0 rules are egress on TCP 443.",
+      "gap": "No managed networking services layered on top: no VPC endpoints/PrivateLink for ECR, CloudWatch Logs, or Secrets Manager, so AWS API egress leaves the VPC over the public 443 path.",
+      "recommendation": "Add interface VPC endpoints for ecr.api, ecr.dkr, logs, and secretsmanager plus an S3 gateway endpoint, then tighten App Runner egress from 0.0.0.0/0:443 to the endpoint security group.",
+      "severity": "Low", "priority": "P1", "effort": "Low", "phase": 2,
+      "evidence": {"file": "infrastructure/monolith-apprunner.yaml", "lines": null},
+      "mod_metadata": {"internal_score": 3, "score_label": "Partial", "archetype_calibrated": false, "core_question": true}
     },
     {
-      "question_id": "INF-Q6",
-      "category": "Infrastructure & DevOps",
-      "category_display": "Infrastructure, Platform, and DevOps",
-      "category_id": "INF",
-      "title": "API Entry Point Lacks Full API Management",
-      "description": "AWS WAF with IP whitelisting and managed rules associated with App Runner. No API Gateway with throttling, request validation, or per-endpoint authorization.",
-      "gap": "No API Gateway with throttling, request validation, or per-endpoint authorization.",
-      "recommendation": "Consider adding API Gateway for throttling, request validation, and authorization when decomposing into services.",
-      "severity": "Low",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 3,
-        "score_label": "Partial",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "INF-Q6", "category": "Infrastructure & DevOps", "category_display": "Infrastructure, Platform, and DevOps", "category_id": "INF",
+      "title": "API Entry Point", "description": "The entry point is the App Runner managed service URL with an HTTP health check and an associated WAFv2 Web ACL (IP allowlist plus AWSManagedRulesKnownBadInputsRuleSet). There is no API Gateway, AppSync, or ALB, so no request validation, per-client throttling, or gateway authorizer exists; authentication is handled in index.php via PHP sessions.",
+      "gap": "Managed routing and health checking exist, but gateway-level throttling, schema validation, and authorization are absent. MaxConcurrency 100 is a capacity setting, not a rate limit.",
+      "recommendation": "Place Amazon API Gateway (HTTP API) in front of App Runner for the /api/* surface with usage-plan throttling and request validation, so it becomes the stable contract for extracted services.",
+      "severity": "Low", "priority": "P2", "effort": "Medium", "phase": 3,
+      "evidence": {"file": "infrastructure/monolith-apprunner.yaml", "lines": null},
+      "mod_metadata": {"internal_score": 3, "score_label": "Partial", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "INF-Q7",
-      "category": "Infrastructure & DevOps",
-      "category_display": "Infrastructure, Platform, and DevOps",
-      "category_id": "INF",
-      "title": "Basic Auto-Scaling Only",
-      "description": "App Runner auto-scaling configured with MinSize:1, MaxSize:3, MaxConcurrency:100. No custom scaling policies, no data-layer scaling. RDS is single db.t3.micro with no read replicas.",
-      "gap": "Auto-scaling exists but uses basic settings. No data-layer scaling, no custom policies.",
-      "recommendation": "Tune App Runner concurrency based on load testing. Consider Aurora with auto-scaling for database layer.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "INF-Q7", "category": "Infrastructure & DevOps", "category_display": "Infrastructure, Platform, and DevOps", "category_id": "INF",
+      "title": "Auto-Scaling", "description": "AppRunner AutoScalingConfiguration uses out-of-box concurrency scaling (MinSize 1, MaxSize 3, MaxConcurrency 100) with no tuning. The data layer has no scaling: fixed db.t3.micro, AllocatedStorage 20 with no MaxAllocatedStorage, no read replicas, and no ApplicationAutoScaling resources or business-metric policies.",
+      "gap": "Scaling coverage is compute-only with default settings; the statically provisioned database is the first bottleneck and 20 GB fixed storage is an availability risk.",
+      "recommendation": "Set MaxAllocatedStorage on the RDS instance, raise App Runner MaxSize after load testing, tune MaxConcurrency against measured throughput, and add a read replica or evaluate Aurora MySQL if read load grows.",
+      "severity": "Medium", "priority": "P2", "effort": "Low", "phase": 2,
+      "evidence": {"file": "infrastructure/monolith-apprunner.yaml", "lines": null},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "INF-Q8",
-      "category": "Infrastructure & DevOps",
-      "category_display": "Infrastructure, Platform, and DevOps",
-      "category_id": "INF",
-      "title": "Backup Missing PITR and Cross-Region",
-      "description": "RDS automated backups with 7-day retention and defined backup window. DeletionPolicy: Snapshot. No PITR, no cross-region backup, no restore testing.",
-      "gap": "Missing PITR, no cross-region backup, no documented restore procedure.",
-      "recommendation": "Enable PITR on RDS. Add AWS Backup plan with cross-region copy. Document restore procedure.",
-      "severity": "Low",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 3,
-        "score_label": "Partial",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "INF-Q8", "category": "Infrastructure & DevOps", "category_display": "Infrastructure, Platform, and DevOps", "category_id": "INF",
+      "title": "Backup and Recovery", "description": "RDS automated backups are enabled (BackupRetentionPeriod 7, backup window 03:00-04:00) with Snapshot DeletionPolicy and UpdateReplacePolicy. No AWS::Backup::BackupPlan, no cross-region backup copy, and no documented or tested restore procedure.",
+      "gap": "Backups cover the single production store but there is no centralized backup plan, no cross-region copy for a regional failure, and no restore testing evidence.",
+      "recommendation": "Add an AWS Backup plan with a cross-region copy rule for the RDS instance, document the restore runbook with RTO/RPO and endpoint cutover steps, and schedule periodic restore tests.",
+      "severity": "Low", "priority": "P2", "effort": "Low", "phase": 2,
+      "evidence": {"file": "infrastructure/monolith-apprunner.yaml", "lines": null},
+      "mod_metadata": {"internal_score": 3, "score_label": "Partial", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "INF-Q9",
-      "category": "Infrastructure & DevOps",
-      "category_display": "Infrastructure, Platform, and DevOps",
-      "category_id": "INF",
-      "title": "HA Configuration Could Be Stronger",
-      "description": "RDS MultiAZ: true. VPC spans 2 AZs. App Runner min instances is 1 which may run in a single AZ during low traffic.",
-      "gap": "App Runner MinSize=1 may result in single-AZ during low traffic.",
-      "recommendation": "Set MinSize: 2 for production to ensure multi-AZ presence at all times.",
-      "severity": "Low",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 3,
-        "score_label": "Partial",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "INF-Q10", "category": "Infrastructure & DevOps", "category_display": "Infrastructure, Platform, and DevOps", "category_id": "INF",
+      "title": "Infrastructure as Code Coverage", "description": "One CloudFormation template covers compute (App Runner, auto-scaling, VPC connector), registry (ECR with KMS, lifecycle policy, immutable tags), networking (VPC, subnets, security groups, flow logs with KMS and IAM role), data (RDS, subnet group, monitoring role), edge security (WAFv2 Web ACL, IP set), and IAM. Absent: CloudWatch alarms/dashboards, DNS, AWS Backup plan, Secrets Manager, and pipeline resources.",
+      "gap": "Primary resources are code-defined, but the operational/DR and secrets categories the service depends on (alarming, backup plan, credential storage) have no in-repo IaC, capping coverage below 90%.",
+      "recommendation": "Extend the template with CloudWatch alarms for App Runner 5xx/latency and RDS CPU/connections/free-storage, an AWS Backup plan, and a Secrets Manager secret for the DB credential.",
+      "severity": "Low", "priority": "P1", "effort": "Medium", "phase": 2,
+      "evidence": {"file": "infrastructure/monolith-apprunner.yaml", "lines": null},
+      "mod_metadata": {"internal_score": 3, "score_label": "Partial", "archetype_calibrated": false, "core_question": true}
     },
     {
-      "question_id": "INF-Q10",
-      "category": "Infrastructure & DevOps",
-      "category_display": "Infrastructure, Platform, and DevOps",
-      "category_id": "INF",
-      "title": "IaC Missing Operational Resources",
-      "description": "CloudFormation covers compute, networking, database, security, and container registry (~80% coverage). No CloudWatch alarms, dashboards, or backup plans in IaC.",
-      "gap": "No operational resources in IaC: no alarms, dashboards, Route53 health checks, or Backup plans.",
-      "recommendation": "Add CloudWatch alarms, dashboards, and AWS Backup plans to CloudFormation template.",
-      "severity": "Low",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 3,
-        "score_label": "Partial",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
+      "question_id": "INF-Q11", "category": "Infrastructure & DevOps", "category_display": "Infrastructure, Platform, and DevOps", "category_id": "INF",
+      "title": "CI/CD Automation", "description": "No pipeline definition exists. Searched and did not find .github/workflows/, .gitlab-ci.yml, Jenkinsfile, buildspec.yml, appspec.yml, or CodePipeline/CodeBuild resources in IaC. The only automation is deploy.sh (local docker-compose build/up with a manual smoke curl), and the template's DeploymentInstructions output prescribes manual docker build/push and aws cloudformation update-stack steps for both application and infrastructure changes.",
+      "gap": "Zero CI/CD automation on either the application or IaC track; no automated build, test, deploy, or rollback stage. Releases depend on an operator executing documented commands correctly.",
+      "recommendation": "Create a pipeline with lint+test, docker build, ECR push with an immutable tag, cloudformation deploy, and post-deploy smoke test stages, plus automated rollback on health-check failure; treat the IaC template as a pipeline-deployed artifact.",
+      "severity": "High", "priority": "P1", "effort": "Medium", "phase": 1,
+      "evidence": {"file": "deploy.sh", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
     },
     {
-      "question_id": "INF-Q11",
-      "category": "Infrastructure & DevOps",
-      "category_display": "Infrastructure, Platform, and DevOps",
-      "category_id": "INF",
-      "title": "No CI/CD Automation",
-      "description": "No CI/CD pipeline exists. Deployment is a manual bash script (deploy.sh) running docker-compose. CloudFormation outputs provide manual CLI deployment instructions.",
-      "gap": "No CI/CD \u2014 all deployments are manual scripts. No automated build, test, or deploy stages.",
-      "recommendation": "Implement CI/CD pipeline using AWS CodePipeline + CodeBuild or GitHub Actions with build, test, security scan, and auto-deploy stages.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "deploy.sh",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
+      "question_id": "APP-Q1", "category": "Application Architecture", "category_display": "Application Architecture", "category_id": "APP",
+      "title": "Programming Languages", "description": "PHP 8.2 (FROM php:8.2-apache), a current supported runtime, but with no framework and no dependency manager: no composer.json, no router/ORM library, no AWS SDK. Routing uses strpos/preg_match on REQUEST_URI and data access is raw PDO. Per rubric, PHP scores 2 regardless of version because its cloud-native tooling depth is limited relative to Python/Node/Go/Java/.NET.",
+      "gap": "Thin AWS and cloud-native ecosystem, compounded by the absence of any framework or dependency manifest: no middleware pipeline, no DI, and no managed dependency surface to patch or scan.",
+      "recommendation": "Adopt Composer plus a minimal framework (Slim or Laravel) so routing, validation, middleware, and the AWS SDK for PHP are available and dependency scanning has a manifest; evaluate a deeper-tooling runtime for newly extracted services rather than rewriting the monolith.",
+      "severity": "Medium", "priority": "P2", "effort": "High", "phase": 3,
+      "evidence": {"file": "Dockerfile", "lines": "1"},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "APP-Q1",
-      "category": "Application Architecture",
-      "category_display": "Application Architecture",
-      "category_id": "APP",
-      "title": "PHP Language with Limited Cloud-Native Tooling",
-      "description": "PHP 8.2 with Apache. No framework (raw PHP with manual routing). PHP has functional AWS SDK but limited cloud-native tooling depth.",
-      "gap": "PHP has narrower cloud-native tooling. No framework, no dependency manifest (composer.json).",
-      "recommendation": "For extracted services during decomposition, consider Python, Node.js, or Go. If PHP is retained, adopt a framework and add composer.json.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "High",
-      "phase": 3,
-      "evidence": {
-        "file": "Dockerfile",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "APP-Q2", "category": "Application Architecture", "category_display": "Application Architecture", "category_id": "APP",
+      "title": "Monolith vs Microservices", "description": "The entire application is one 3,192-line file. index.php contains the schema bootstrap for nine tables, seed data, session auth, every /api/* handler, and the full HTML/CSS/JS UI. Its own header states 'All business domains tightly coupled in a single PHP application / Using MySQL shared database'. There is no package, namespace, class, or module structure, only top-level functions and inline route blocks sharing global session state, and all domains query each other's tables directly (the returns handler joins returns, orders, order_items, payments, and inventory in one request).",
+      "gap": "No module boundaries and a single shared schema with pervasive cross-domain SQL. Independent scaling, deployment, and ownership are impossible, and the blast radius of any defect is the whole system.",
+      "recommendation": "Execute the Conditional/Adaptive plan: split index.php into per-domain modules with per-domain data access and schemas, then extract fulfillment and returns as services behind an Anti-corruption Layer using Strangler Fig. Add integration tests before the first extraction.",
+      "severity": "High", "priority": "P1", "effort": "High", "phase": 1,
+      "evidence": {"file": "index.php", "lines": "1-6, 30-137, 282-1599"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
     },
     {
-      "question_id": "APP-Q2",
-      "category": "Application Architecture",
-      "category_display": "Application Architecture",
-      "category_id": "APP",
-      "title": "Tightly-Coupled Monolith",
-      "description": "Single 3193-line PHP file containing all business domains: orders, fulfillment, inventory, payments, returns, users, and frontend SPA. All domains share a single MySQL database with cross-domain foreign keys. No module boundaries.",
-      "gap": "Tightly-coupled monolith with no clear module boundaries and pervasive shared state.",
-      "recommendation": "Begin decomposition following Strangler Fig pattern. First: reorganize into modular monolith with separate files per domain.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "index.php",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
+      "question_id": "APP-Q3", "category": "Application Architecture", "category_display": "Application Architecture", "category_id": "APP",
+      "title": "Async vs Sync Communication", "description": "All communication is synchronous: browser fetch() calls to /api/* and synchronous PDO writes server-side. No message publishes, queue consumers, event emission, or background workers exist; update_order_status() performs an inline UPDATE plus INSERT and returns. The Dockerfile installs only pdo/pdo_mysql, so no messaging client is available at runtime.",
+      "gap": "100% synchronous with no async pattern. Cross-domain effects propagate inside the caller's request, leaving no buffering, no retry, and no decoupling seam to extract against.",
+      "recommendation": "Publish domain events to Amazon EventBridge at each state transition and move non-critical side effects (notifications, interaction logging, analytics) to SQS-backed consumers inside the monolith, so extracted services consume an existing event stream.",
+      "severity": "Medium", "priority": "P2", "effort": "Medium", "phase": 2,
+      "evidence": {"file": "index.php", "lines": "238-248, 300-359, 1360-1412"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": true, "core_question": false}
     },
     {
-      "question_id": "APP-Q3",
-      "category": "Application Architecture",
-      "category_display": "Application Architecture",
-      "category_id": "APP",
-      "title": "All Communication Synchronous",
-      "description": "All communication is synchronous HTTP request-response. No message queues, no event publishing, no async job processing. For a stateful-crud service, state changes that should trigger downstream processes block the primary request.",
-      "gap": "All communication synchronous HTTP with no async patterns.",
-      "recommendation": "Introduce async patterns for state-change propagation via EventBridge/SQS. Keep synchronous reads but decouple write-side effects.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "index.php",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": true,
-        "core_question": false
-      }
+      "question_id": "APP-Q4", "category": "Application Architecture", "category_display": "Application Architecture", "category_id": "APP",
+      "title": "Long-Running Process Handling", "description": "Every operation executes synchronously inside the HTTP request. No job framework, no job-status table or endpoint, no POST-then-poll pattern, and no background process in the container (Apache only). Data-volume-dependent operations run inline: /api/admin/orders/pending-fulfillment and /api/admin/pending-returns issue unbounded multi-table queries, and /api/warehouses/assignment-options computes Haversine distances across all warehouses in-request.",
+      "gap": "No asynchronous job path exists, so any operation that grows past the request timeout (bulk fulfillment, large admin reports, future carrier-API calls) blocks the caller and fails with no resumability.",
+      "recommendation": "Add an async job path for admin/reporting and fulfillment-batch operations: enqueue to SQS, process in a Lambda or separate App Runner worker, and expose a job-status endpoint for polling. This also underpins the Step Functions orchestration recommended for INF-Q3.",
+      "severity": "Medium", "priority": "P2", "effort": "Medium", "phase": 2,
+      "evidence": {"file": "index.php", "lines": "457-634, 1261-1280, 1343-1359"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": true, "core_question": false}
     },
     {
-      "question_id": "APP-Q4",
-      "category": "Application Architecture",
-      "category_display": "Application Architecture",
-      "category_id": "APP",
-      "title": "Long-Running Operations Handled Synchronously",
-      "description": "Order fulfillment operations (Haversine distance calculations, fraud scoring, shipping cost computation) all execute synchronously within HTTP requests. No async job processing or status polling.",
-      "gap": "All operations synchronous regardless of duration. No async job processing, no status polling.",
-      "recommendation": "Implement async job processing for fraud validation, warehouse assignment, and bulk operations using SQS + Lambda or Step Functions.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "index.php",
-        "lines": "360-630"
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": true,
-        "core_question": false
-      }
+      "question_id": "APP-Q5", "category": "Application Architecture", "category_display": "Application Architecture", "category_id": "APP",
+      "title": "API Versioning Strategy", "description": "No versioning of any kind. Every route is matched directly under /api/ with no /v1/ segment, no Accept-Version or custom version header handling, and no version query parameter. No OpenAPI/Swagger document and no CHANGELOG exist in the repository.",
+      "gap": "Any breaking request/response change breaks the embedded UI and all external consumers simultaneously, with no deprecation window and no published contract to version against.",
+      "recommendation": "Introduce a /v1/ path prefix (keeping unprefixed routes as temporary aliases), publish an OpenAPI 3 document, and adopt a deprecation policy before decomposition so extracted services inherit a stable contract.",
+      "severity": "Medium", "priority": "P2", "effort": "Low", "phase": 2,
+      "evidence": {"file": "index.php", "lines": "282-1599"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "APP-Q5",
-      "category": "Application Architecture",
-      "category_display": "Application Architecture",
-      "category_id": "APP",
-      "title": "No API Versioning",
-      "description": "No API versioning. All endpoints use unversioned paths (/api/products, /api/orders). No /v1/ prefix, no version headers.",
-      "gap": "No versioning \u2014 breaking changes deployed directly with no backward compatibility.",
-      "recommendation": "Adopt URL path versioning (e.g., /api/v1/products) before establishing API consumers.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "index.php",
-        "lines": "282-1560"
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "APP-Q6", "category": "Application Architecture", "category_display": "Application Architecture", "category_id": "APP",
+      "title": "Service Discovery", "description": "The only external dependency is MySQL, resolved from environment variables with hardcoded in-code fallbacks (getenv('DB_HOST') ?: 'mysql'). Production injects the RDS endpoint via CloudFormation RuntimeEnvironmentVariables; local development uses the compose service name. No Cloud Map, service mesh, or registry exists, though there is also only one deployable today.",
+      "gap": "Endpoint resolution is environment-variable based with in-code defaults and no dynamic discovery, so a misconfigured deployment silently targets the wrong endpoint instead of failing fast.",
+      "recommendation": "Remove the in-code fallbacks so missing configuration fails fast, and register services in AWS Cloud Map as the monolith is decomposed so extracted services resolve each other dynamically.",
+      "severity": "Medium", "priority": "P2", "effort": "Low", "phase": 3,
+      "evidence": {"file": "index.php", "lines": "14-18"},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "APP-Q6",
-      "category": "Application Architecture",
-      "category_display": "Application Architecture",
-      "category_id": "APP",
-      "title": "Environment Variables Only for Service Configuration",
-      "description": "Environment variables for database endpoint (DB_HOST, DB_NAME, DB_USER, DB_PASS). No dynamic service discovery.",
-      "gap": "Environment variables for endpoints but no dynamic discovery. Will need service discovery when decomposed.",
-      "recommendation": "Adopt AWS Cloud Map or service mesh for dynamic discovery when decomposing into microservices.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "index.php",
-        "lines": "14-18"
-      },
-      "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "DATA-Q1", "category": "Data Platform", "category_display": "Data Platform Modernization", "category_id": "DATA",
+      "title": "Unstructured Data Storage", "description": "No unstructured data is stored. index.php performs no filesystem writes; the only file_get_contents calls read php://input for JSON bodies. There are no upload endpoints, no image/PDF handling, no S3 bucket in IaC, and no document-parsing library. Shipping labels, tracking numbers, and QC checklists are generated as inline strings.",
+      "gap": "No object-storage foundation exists, so any future document surface (invoices, shipping labels, product imagery, return photos) would have to land in MySQL or the container's ephemeral read-only filesystem.",
+      "recommendation": "Provision a KMS-encrypted, versioned, private S3 bucket in the CloudFormation template now and route future document or media artifacts to it via presigned URLs. Textract-based parsing is not needed until a document surface exists.",
+      "severity": "Low", "priority": "P1", "effort": "Low", "phase": 3,
+      "evidence": {"file": "infrastructure/monolith-apprunner.yaml", "lines": null},
+      "mod_metadata": {"internal_score": 3, "score_label": "Partial", "archetype_calibrated": false, "core_question": true}
     },
     {
-      "question_id": "DATA-Q1",
-      "category": "Data Platform",
-      "category_display": "Data Platform Modernization",
-      "category_id": "DATA",
-      "title": "No Managed Object Storage",
-      "description": "No S3 or managed object storage. Product images referenced as URL paths with no backing storage infrastructure defined.",
-      "gap": "No managed object storage. Product images and documents have no defined storage strategy.",
-      "recommendation": "Adopt S3 for unstructured data (product images, shipping labels, receipts). Add CloudFront for delivery.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
+      "question_id": "DATA-Q2", "category": "Data Platform", "category_display": "Data Platform Modernization", "category_id": "DATA",
+      "title": "Unified Data Access Layer", "description": "Connection creation is centralized in a single get_db() factory returning a configured PDO handle and all queries use prepared statements, but 74 prepare/query/exec call sites are inlined directly in route handlers with SQL (including cross-domain joins across orders, order_items, payments, inventory, and warehouses) embedded in HTTP handling code. There is no repository, DAO, entity, or ORM layer.",
+      "gap": "The shared connection factory is the only point of control. Query logic, column knowledge, and transaction boundaries are duplicated across dozens of handlers, so no data contract can be enforced.",
+      "recommendation": "Introduce per-domain repository classes (Order, Inventory, Payment, Return, Warehouse, User) and route all SQL through them; this is the same refactor that enables per-domain schema isolation during decomposition.",
+      "severity": "Medium", "priority": "P2", "effort": "Medium", "phase": 2,
+      "evidence": {"file": "index.php", "lines": "14-27, 30-1599"},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "DATA-Q2",
-      "category": "Data Platform",
-      "category_display": "Data Platform Modernization",
-      "category_id": "DATA",
-      "title": "Scattered Database Access",
-      "description": "Raw SQL queries scattered throughout index.php with no abstraction. get_db() provides connection but no repository/DAO pattern, no query reuse.",
-      "gap": "Database queries scattered across the entire monolith with no pattern or centralized access.",
-      "recommendation": "Introduce repository/DAO layer per domain. Centralize queries and enforce data contracts.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "index.php",
-        "lines": "292-1560"
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "DATA-Q3", "category": "Data Platform", "category_display": "Data Platform Modernization", "category_id": "DATA",
+      "title": "Database Engine Version and EOL", "description": "The production engine is explicitly pinned (Engine mysql, EngineVersion 8.4.8) with AutoMinorVersionUpgrade true and a declared maintenance window; MySQL 8.4 is the current LTS series and is not near EOL. The local stack pins mysql:8.0, a different series. No version-update procedure (downtime window, rollback, risk acknowledgment) is documented.",
+      "gap": "Versions are pinned and EOL-safe, but there is no documented engine-upgrade procedure, and dev/prod run different MySQL series which can mask behavioural differences.",
+      "recommendation": "Document the engine-upgrade runbook (pre-upgrade snapshot, maintenance window, snapshot-restore rollback) alongside the IaC and align docker-compose.yml to mysql:8.4.",
+      "severity": "Low", "priority": "P1", "effort": "Low", "phase": 3,
+      "evidence": {"file": "infrastructure/monolith-apprunner.yaml", "lines": null},
+      "mod_metadata": {"internal_score": 3, "score_label": "Partial", "archetype_calibrated": false, "core_question": true}
     },
     {
-      "question_id": "SEC-Q2",
-      "category": "Security Baseline",
-      "category_display": "Security Baseline",
-      "category_id": "SEC",
-      "title": "Mixed Encryption Approach",
-      "description": "RDS uses AWS-managed encryption. ECR and VPC Flow Logs use customer-managed KMS keys with rotation. Mixed approach across data stores.",
-      "gap": "RDS uses AWS-managed encryption rather than customer-managed KMS key. No centralized key management.",
-      "recommendation": "Create customer-managed KMS key for RDS with defined rotation policy for full key control.",
-      "severity": "Low",
-      "priority": "P1",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 3,
-        "score_label": "Partial",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
+      "question_id": "SEC-Q2", "category": "Security Baseline", "category_display": "Security Baseline", "category_id": "SEC",
+      "title": "Encryption at Rest", "description": "Every at-rest surface is encrypted: RDS StorageEncrypted true (AWS-managed key, no KmsKeyId), ECR with EncryptionType KMS using a dedicated customer-managed key with rotation enabled, and the VPC flow-log CloudWatch log group using a second customer-managed rotating key with a scoped policy. No unencrypted data store exists.",
+      "gap": "The highest-value store — the RDS instance holding customer, order, and payment records — uses the AWS-managed aws/rds key rather than a customer-managed key, so there is no scoped key policy, independent rotation control, or key-level audit separation. No documented rotation policy for the existing CMKs.",
+      "recommendation": "Create a customer-managed KMS key for the database and set KmsKeyId on the RDS instance (via an encrypted snapshot copy/restore), and document the rotation policy for all three keys.",
+      "severity": "Low", "priority": "P1", "effort": "Low", "phase": 2,
+      "evidence": {"file": "infrastructure/monolith-apprunner.yaml", "lines": null},
+      "mod_metadata": {"internal_score": 3, "score_label": "Partial", "archetype_calibrated": false, "core_question": true}
     },
     {
-      "question_id": "SEC-Q3",
-      "category": "Security Baseline",
-      "category_display": "Security Baseline",
-      "category_id": "SEC",
-      "title": "Session-Based Auth Without Tokens",
-      "description": "PHP session-based authentication with cookies. Users log in with username/password. No OAuth2/JWT token-based authentication.",
-      "gap": "Session-based authentication without token-based auth. Sessions limit scalability.",
-      "recommendation": "Migrate to JWT token-based authentication with Cognito. Implement per-request token validation.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "index.php",
-        "lines": "270-290"
-      },
-      "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "SEC-Q3", "category": "Security Baseline", "category_display": "Security Baseline", "category_id": "SEC",
+      "title": "API Authentication", "description": "Authentication is PHP server-side sessions. The /api/ dispatcher rejects unauthenticated calls with 401 before any route match, and admin routes additionally check the session role; passwords are verified with password_verify against bcrypt hashes. There is no token-based auth (no OAuth2, JWT, Bearer validation, or gateway authorizer) and no CSRF token on cookie-authenticated state-changing POST/PUT routes.",
+      "gap": "Cookie/session authentication rather than per-request tokens: calls are not independently attributable, there is no token scoping or expiry control, mutating endpoints lack CSRF protection, and the in-process session store conflicts with multi-instance scaling (MaxSize 3).",
+      "recommendation": "Move the API surface to token-based authentication (OIDC/JWT via Amazon Cognito validated at an API Gateway authorizer), keep sessions only for the server-rendered UI, and add CSRF tokens to cookie-authenticated form posts in the interim.",
+      "severity": "Medium", "priority": "P2", "effort": "Medium", "phase": 2,
+      "evidence": {"file": "index.php", "lines": "228, 282-291, 1263"},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "SEC-Q4",
-      "category": "Security Baseline",
-      "category_display": "Security Baseline",
-      "category_id": "SEC",
-      "title": "No Centralized Identity Provider",
-      "description": "Application manages own authentication with users table and bcrypt passwords. No Cognito, OIDC, SAML, or external IdP.",
-      "gap": "Application manages authentication entirely with no external IdP integration. No SSO.",
-      "recommendation": "Integrate with Amazon Cognito for identity. Migrate to Cognito user pools with JWT, MFA, and federation.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "index.php",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "SEC-Q4", "category": "Security Baseline", "category_display": "Security Baseline", "category_id": "SEC",
+      "title": "Centralized Identity Integration", "description": "The application manages authentication entirely on its own: a local users table created in init_db() and seeded with two accounts whose passwords are generated from the literals 'customer123' and 'admin123', a form login validated with password_verify, and in-app user administration endpoints. No Cognito user pool, OIDC/SAML configuration, federation, or SSO exists.",
+      "gap": "A standalone identity store with no external IdP integration: no SSO, no central MFA or password policy, no federated group-to-role mapping, and no path into an organization-wide access policy. Seeded default credentials with well-known passwords compound the exposure.",
+      "recommendation": "Integrate with Amazon Cognito or the organization's IdP via OIDC/SAML, map IdP groups to the existing customer/admin roles, reduce the local users table to profile data, and remove the seeded default credentials from source.",
+      "severity": "Medium", "priority": "P2", "effort": "Medium", "phase": 2,
+      "evidence": {"file": "index.php", "lines": "123-137, 158-175, 256-280"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "SEC-Q5",
-      "category": "Security Baseline",
-      "category_display": "Security Baseline",
-      "category_id": "SEC",
-      "title": "Hardcoded Credentials in Source",
-      "description": "Plaintext credential fallback in source: getenv('DB_PASS') ?: 'ecommerce_pass'. CloudFormation uses NoEcho parameters without Secrets Manager. No rotation.",
-      "gap": "Plaintext credentials in source code. Production credentials in NoEcho parameters without Secrets Manager. No rotation.",
-      "recommendation": "Remove hardcoded fallbacks. Migrate to AWS Secrets Manager with automatic rotation. Use resolve:secretsmanager in CloudFormation.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {
-        "file": "index.php",
-        "lines": "18"
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
+      "question_id": "SEC-Q5", "category": "Security Baseline", "category_display": "Security Baseline", "category_id": "SEC",
+      "title": "Secrets Management", "description": "A plaintext credential is present in source: index.php:18 reads $pass = getenv('DB_PASS') ?: 'ecommerce_pass', a hardcoded database password fallback committed to the repository. In production the RDS master password is a CloudFormation NoEcho parameter injected into the App Runner service as a plaintext RuntimeEnvironmentVariables entry, readable from service configuration. No Secrets Manager resource, no rotation, and the instance still uses a static master password despite EnableIAMDatabaseAuthentication being true. docker-compose.yml correctly requires credentials from the environment.",
+      "gap": "Plaintext credentials in source (Score 1 by rubric regardless of other controls), plus a NoEcho parameter not backed by Secrets Manager at runtime and exposed in the App Runner environment. No rotation anywhere.",
+      "recommendation": "Delete the 'ecommerce_pass' fallback so missing configuration fails fast; create a Secrets Manager secret with a RotationSchedule and attach it via ManageMasterUserPassword; replace the plaintext App Runner environment variable with a Secrets Manager reference scoped in the instance role; prefer IAM database authentication, which is already enabled; and rotate the credential that has been in source control.",
+      "severity": "High", "priority": "P1", "effort": "Medium", "phase": 1,
+      "evidence": {"file": "index.php", "lines": "14-18"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
     },
     {
-      "question_id": "SEC-Q6",
-      "category": "Security Baseline",
-      "category_display": "Security Baseline",
-      "category_id": "SEC",
-      "title": "Default Base Images Without Hardening",
-      "description": "Dockerfile uses standard php:8.2-apache image with non-root user. ECR ScanOnPush enabled. No hardened images, no Dependabot/Renovate.",
-      "gap": "Default base images with no hardening. No dependency-update automation.",
-      "recommendation": "Use hardened base image. Add Dependabot/Renovate. Integrate ECR scan as deployment gate.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "Dockerfile",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "SEC-Q6", "category": "Security Baseline", "category_display": "Security Baseline", "category_id": "SEC",
+      "title": "Compute Hardening and Patching", "description": "Container hardening is present: a dedicated non-root appuser with USER appuser, apt list cleanup, and a HEALTHCHECK in the Dockerfile; no-new-privileges, read_only, and tmpfs mounts in docker-compose.yml; ECR ScanOnPush true with IMMUTABLE tags; and App Runner as a managed runtime handling host patching. Weak points: the php:8.2-apache base is a stock Debian image rather than a hardened/minimal base, and there is no Dependabot or Renovate configuration.",
+      "gap": "Vulnerability scanning exists (ECR scan-on-push) but is not integrated into any pipeline or blocking gate, the base image is unhardened, and there is no automated dependency/base-image update mechanism.",
+      "recommendation": "Pin the base image by digest with scheduled rebuilds, add .github/dependabot.yml (or Renovate) covering the Dockerfile base image, enable ECR enhanced scanning with Amazon Inspector, and fail the future pipeline on critical/high findings.",
+      "severity": "Low", "priority": "P2", "effort": "Low", "phase": 2,
+      "evidence": {"file": "Dockerfile", "lines": null},
+      "mod_metadata": {"internal_score": 3, "score_label": "Partial", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "SEC-Q7",
-      "category": "Security Baseline",
-      "category_display": "Security Baseline",
-      "category_id": "SEC",
-      "title": "No Security Scanning Pipeline",
-      "description": "No SAST, DAST, or dependency scanning tools. No CI/CD pipeline exists. No Dependabot, Renovate, or Snyk configuration.",
-      "gap": "No security scanning tools configured. No pipeline with security validation.",
-      "recommendation": "Add Dependabot for dependency scanning, CodeGuru/Semgrep for SAST, and gate deployments on ECR scan results.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "Dockerfile",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "SEC-Q7", "category": "Security Baseline", "category_display": "Security Baseline", "category_id": "SEC",
+      "title": "Application Security Pipeline", "description": "The only automated security control is registry-side ECR ScanOnPush, which runs outside any pipeline with no gate on results. There is no CI/CD pipeline at all, so no security stage exists: no SAST (no SonarQube, Semgrep, or CodeGuru config), no dependency scanning (and no manifest to scan), no DAST, and no .snyk, dependabot, or renovate configuration. The WAFv2 Known Bad Inputs rule group is a runtime control rather than a pipeline control.",
+      "gap": "Container scanning exists but is unintegrated and non-blocking; there is no SAST and no dependency scanning, so code-level and library-level vulnerabilities reach production unexamined.",
+      "recommendation": "Add a security stage to the pipeline created for INF-Q11: Semgrep or SonarQube SAST on the PHP source, a Composer-based dependency audit once a manifest exists, and an ECR/Inspector scan gate blocking promotion on critical or high findings.",
+      "severity": "Medium", "priority": "P2", "effort": "Medium", "phase": 2,
+      "evidence": {"file": ".github/workflows/", "lines": null},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "OPS-Q1",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "No Distributed Tracing",
-      "description": "No tracing instrumentation. No OpenTelemetry, no X-Ray. No trace ID propagation or correlation IDs.",
-      "gap": "No distributed tracing. No ability to trace request flows or identify bottlenecks.",
-      "recommendation": "Instrument with AWS X-Ray or OpenTelemetry for PHP to trace database queries and HTTP handlers.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "index.php",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "OPS-Q1", "category": "Operations & Observability", "category_display": "Operations & Observability", "category_id": "OPS",
+      "title": "Distributed Tracing", "description": "No tracing instrumentation exists: no OpenTelemetry or X-Ray SDK usage, no X-Amzn-Trace-Id or traceparent propagation, and no correlation/request-ID generation in index.php; no tracing extension in the Dockerfile and no collector or sidecar in compose or IaC. Observability is limited to ini_set('log_errors','1') and browser-side console.log statements.",
+      "gap": "No trace or request-correlation identifier flows through the system, so a failing request cannot be followed across Apache, PHP, and MySQL, and there is no baseline instrumentation to extend after decomposition.",
+      "recommendation": "Enable AWS X-Ray or OpenTelemetry PHP instrumentation now, generate and propagate a request ID into every log line and database error, and establish header propagation conventions before extraction begins.",
+      "severity": "Medium", "priority": "P2", "effort": "Medium", "phase": 2,
+      "evidence": {"file": "index.php", "lines": "8-11"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "OPS-Q2",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "No SLO Definitions",
-      "description": "No SLOs defined. No CloudWatch alarms on latency or error rate. Only RDS Enhanced Monitoring for infrastructure metrics.",
-      "gap": "No SLOs \u2014 no formal definition of acceptable service levels.",
-      "recommendation": "Define SLOs for critical journeys (order placement p99 < 2s, error rate < 1%, availability > 99.9%).",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "OPS-Q2", "category": "Operations & Observability", "category_display": "Operations & Observability", "category_id": "OPS",
+      "title": "SLO Definitions", "description": "No monitoring artifacts exist from which an implicit SLO could be read: the CloudFormation template contains no CloudWatch alarm, composite alarm, dashboard, or Route 53 health check. The only threshold-like configuration is liveness checking (App Runner HealthCheckConfiguration, container HEALTHCHECK, compose healthchecks), which defines no latency or error-rate objective. WAF and RDS enhanced monitoring emit metrics that no alarm consumes.",
+      "gap": "No formal or implicit service-level objective: no latency target, no error-budget definition, and no alarm on any metric, so degradation is detectable only when a health check fails outright.",
+      "recommendation": "Define SLOs for the critical journeys (product browse, order placement, fulfillment transitions) and implement them as CloudWatch alarms on App Runner p99 latency and 5xx rate in IaC, then add error-budget tracking once a baseline exists.",
+      "severity": "Medium", "priority": "P2", "effort": "Low", "phase": 3,
+      "evidence": {"file": "infrastructure/monolith-apprunner.yaml", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "OPS-Q3",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "No Business Metrics",
-      "description": "No custom metrics published. No business-outcome metrics. Only infrastructure metrics via RDS Enhanced Monitoring and App Runner defaults.",
-      "gap": "No custom metrics \u2014 only default infrastructure metrics. No business visibility.",
-      "recommendation": "Publish custom CloudWatch metrics for orders/minute, fulfillment time, payment success rate, and fraud detection rate.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "index.php",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "OPS-Q3", "category": "Operations & Observability", "category_display": "Operations & Observability", "category_id": "OPS",
+      "title": "Business Metrics", "description": "No custom metrics are published: no CloudWatch PutMetricData call (no AWS SDK is present), no structured metric log lines, and no dashboard. Business outcomes — orders placed, fulfillment-stage throughput, validation and QC failures, return approvals, refund value — exist only as rows in orders, order_status_history, and returns, queryable solely through admin UI endpoints. The only metrics emitted are infrastructure-level (WAF visibility config, RDS enhanced monitoring).",
+      "gap": "Operators see infrastructure signals only; a drop in order placement or a spike in validation failures produces no metric and no alert.",
+      "recommendation": "Emit CloudWatch custom metrics or EMF-structured log lines from update_order_status() and the order/return handlers for orders placed, per-stage transitions, validation/QC failures, and refund amounts, and build a business dashboard alongside the infrastructure one.",
+      "severity": "Medium", "priority": "P2", "effort": "Medium", "phase": 3,
+      "evidence": {"file": "index.php", "lines": "238-248"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "OPS-Q4",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "No Alerting Configured",
-      "description": "No CloudWatch alarms of any kind. WAF publishes metrics but no alarms consume them. No anomaly detection or PagerDuty/OpsGenie integration.",
-      "gap": "No alerting configured. Issues discovered only when users report them.",
-      "recommendation": "Add CloudWatch alarms for 5xx rate, latency p99, RDS CPU, and WAF blocked requests. Enable anomaly detection.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "OPS-Q4", "category": "Operations & Observability", "category_display": "Operations & Observability", "category_id": "OPS",
+      "title": "Anomaly Detection and Alerting", "description": "No alerting is configured: the CloudFormation template defines no CloudWatch alarm (static or anomaly-detection), no SNS topic, no composite alarms, and no PagerDuty/OpsGenie integration. Failure detection is limited to App Runner replacing instances that fail the HTTP health check, which notifies no one.",
+      "gap": "Zero alerting: no one is paged for elevated 5xx rates, latency regressions, RDS connection exhaustion, storage pressure on the fixed 20 GB volume, or WAF block spikes. Incidents are discovered by users.",
+      "recommendation": "Add CloudWatch alarms in IaC for App Runner 5xx rate and p99 latency, RDS CPU/connections/free-storage, and WAF blocked-request spikes, routed to an SNS topic; convert latency and error-rate alarms to anomaly detection once a baseline exists.",
+      "severity": "Medium", "priority": "P2", "effort": "Low", "phase": 2,
+      "evidence": {"file": "infrastructure/monolith-apprunner.yaml", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "OPS-Q5",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "No Deployment Strategy",
-      "description": "Manual bash script deployment (docker-compose). CloudFormation outputs provide manual CLI instructions. No blue/green, canary, or rolling deployment.",
-      "gap": "Direct-to-production deployment with no staged rollout or rollback.",
-      "recommendation": "Enable App Runner auto-deploy from ECR. Consider canary deployments when decomposed.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "deploy.sh",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
+      "question_id": "OPS-Q5", "category": "Operations & Observability", "category_display": "Operations & Observability", "category_id": "OPS",
+      "title": "Deployment Strategy", "description": "The repo owns its deployment artifacts and they describe a rolling replacement with health checks: App Runner gates instance readiness on HealthCheckConfiguration (path /, interval 10, timeout 5) and the container declares its own HEALTHCHECK. There is no traffic shifting of any kind — no CodeDeploy configuration, weighted routing, canary, blue/green, or feature flags — deployment is initiated manually via aws cloudformation update-stack, and there is no automated rollback trigger.",
+      "gap": "Rolling deployment with health checks but no incremental traffic exposure: a defect that passes the shallow / health check reaches 100% of users at once, and rollback is a manual redeploy of the previous image tag.",
+      "recommendation": "Introduce staged rollout — a second (green) App Runner service with weighted DNS or an API Gateway stage split promoted after alarms stay clear, or migrate to ECS/Fargate with CodeDeploy blue/green and alarm-based automatic rollback — and add a deeper health endpoint that verifies database connectivity.",
+      "severity": "Medium", "priority": "P1", "effort": "Medium", "phase": 2,
+      "evidence": {"file": "infrastructure/monolith-apprunner.yaml", "lines": null},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": true}
     },
     {
-      "question_id": "OPS-Q6",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "No Automated Tests",
-      "description": "No test files, directories, or frameworks. No unit, integration, contract, or end-to-end tests of any kind.",
-      "gap": "No integration tests \u2014 no automated tests at all.",
-      "recommendation": "Add PHPUnit integration tests for critical workflows (order placement, fulfillment, payments). Add to CI/CD as gate.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "index.php",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
+      "question_id": "OPS-Q6", "category": "Operations & Observability", "category_display": "Operations & Observability", "category_id": "OPS",
+      "title": "Integration Testing", "description": "There are no automated tests of any kind. The complete file inventory is .gitignore, .htaccess, Dockerfile, deploy.sh, docker-compose.yml, index.php, and infrastructure/monolith-apprunner.yaml — no test directory, no PHPUnit/Pest configuration, no composer.json test script, no Postman collection, no contract tests, and no CI test stage. The closest thing to a test is a single manual smoke curl of /api/products in deploy.sh.",
+      "gap": "No automated verification of any workflow. The eight-step fulfillment chain, order placement with inventory decrement, and the multi-table return-approval flow are all unverified, making both routine change and the recommended decomposition materially risky.",
+      "recommendation": "Add a PHPUnit or Pest suite with an integration tier running the app and a MySQL container in CI, covering login, product list, order placement with inventory decrement, the full validate-to-confirm-delivery chain, and return request through approval/refund/restock; make it a blocking pipeline stage before any extraction.",
+      "severity": "High", "priority": "P1", "effort": "Medium", "phase": 1,
+      "evidence": {"file": "tests/", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
     },
     {
-      "question_id": "OPS-Q7",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "No Incident Response Automation",
-      "description": "No runbooks, automation documents, or self-healing patterns. No documented recovery procedures.",
-      "gap": "No runbooks \u2014 incident response entirely ad hoc.",
-      "recommendation": "Create runbooks for common failures. Evolve to SSM Automation documents for automated remediation.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "deploy.sh",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "OPS-Q7", "category": "Operations & Observability", "category_display": "Operations & Observability", "category_id": "OPS",
+      "title": "Incident Response Automation", "description": "No runbooks exist in any form: no README, no docs/ directory, no markdown or YAML runbook, no SSM Automation document, no Lambda remediation, and no Step Functions incident workflow. The only operational guidance is the CloudFormation DeploymentInstructions output (a deployment procedure) and echo statements in deploy.sh suggesting docker-compose logs. The sole self-healing behaviour is App Runner replacing unhealthy instances.",
+      "gap": "Incident response is entirely ad hoc and undocumented: no runbook for database failover, credential rotation, storage exhaustion, failed-deployment rollback, or stuck orders in the fulfillment workflow, and no automated remediation.",
+      "recommendation": "Author versioned runbooks in the repository for the top failure modes (RDS failover, image rollback, DB credential rotation, stuck-order recovery via order_status_history), then encode the mechanical ones as SSM Automation documents triggerable from alarms.",
+      "severity": "Medium", "priority": "P2", "effort": "Medium", "phase": 3,
+      "evidence": {"file": "docs/", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "OPS-Q8",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "No Observability Ownership",
-      "description": "No CODEOWNERS, no dashboards, no named alarm owners, no team attribution on monitoring resources.",
-      "gap": "No observability ownership \u2014 monitoring is reactive and fragmented.",
-      "recommendation": "Create CloudWatch dashboard. Define alarm ownership. Add CODEOWNERS for observability configs.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "OPS-Q8", "category": "Operations & Observability", "category_display": "Operations & Observability", "category_id": "OPS",
+      "title": "Observability Ownership", "description": "There is no observability ownership: no dashboards or alarms exist to own, and there is no CODEOWNERS file, no SLO definition file, no team or owner tag on any resource, and no SNS topic or on-call routing. Resource tags are limited to Name on most resources and Environment: Production on two, none identifying a team or owner.",
+      "gap": "Monitoring is both absent and unowned: no named team is accountable for service health, there is no per-service dashboard, and no attribution path leads from an alert to a responder.",
+      "recommendation": "Add a CODEOWNERS file covering infrastructure/ and the application source, create a per-service CloudWatch dashboard in IaC, and add Owner/Team tags plus an SNS alert topic with a documented on-call destination alongside the new alarms.",
+      "severity": "Medium", "priority": "P2", "effort": "Low", "phase": 3,
+      "evidence": {"file": "CODEOWNERS", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
     },
     {
-      "question_id": "OPS-Q9",
-      "category": "Operations & Observability",
-      "category_display": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "Inconsistent Resource Tagging",
-      "description": "Resources have Name tags and some Environment tags. No cost allocation, ownership, or team tags. No enforcement.",
-      "gap": "Some resources tagged but inconsistent. No cost allocation or ownership attribution.",
-      "recommendation": "Define tagging standard (Name, Environment, Service, Team, CostCenter). Add AWS Config enforcement.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
+      "question_id": "OPS-Q9", "category": "Operations & Observability", "category_display": "Operations & Observability", "category_id": "OPS",
+      "title": "Resource Tagging Governance", "description": "Tagging is partial and ad hoc. Most resources carry a Name tag derived from ServiceName, and two (ECR repository, App Runner service) additionally carry Environment: Production. Several resources are untagged entirely: VPCFlowLogKMSKey, ECRKMSKey, VPCFlowLogGroup, and VPCFlowLogRole. There is no owner, cost-center, application, or data-classification tag, no stack-level tag enforcement, no AWS Config required-tags rule, and no Organizations Tag Policy.",
+      "gap": "Name is applied broadly and Environment inconsistently, several resources are untagged, and no cost-allocation or ownership dimension exists, so per-workload cost attribution and incident ownership lookup are not possible and nothing enforces the convention.",
+      "recommendation": "Define a required tag set (Application, Environment, Owner, CostCenter, DataClassification), apply it uniformly including to the KMS keys, log group, and IAM roles via stack-level tags, activate cost-allocation tags in Billing, and add an AWS Config required-tags rule to detect drift.",
+      "severity": "Medium", "priority": "P2", "effort": "Low", "phase": 3,
+      "evidence": {"file": "infrastructure/monolith-apprunner.yaml", "lines": null},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": false}
     }
   ],
   "evaluations": [
-    {
-      "question_id": "INF-Q1",
-      "category_id": "INF",
-      "title": "Managed Compute",
-      "status": "pass",
-      "score": 4,
-      "reason": "All compute on managed App Runner with auto-scaling and health checks."
-    },
-    {
-      "question_id": "INF-Q2",
-      "category_id": "INF",
-      "title": "Managed Databases",
-      "status": "pass",
-      "score": 4,
-      "reason": "Fully managed RDS MySQL with Multi-AZ, automated backups, enhanced monitoring."
-    },
-    {
-      "question_id": "DATA-Q3",
-      "category_id": "DATA",
-      "title": "Database Engine Version and EOL",
-      "status": "pass",
-      "score": 4,
-      "reason": "MySQL 8.4.8 explicitly pinned, current and supported. AutoMinorVersionUpgrade enabled."
-    },
-    {
-      "question_id": "DATA-Q4",
-      "category_id": "DATA",
-      "title": "Stored Procedures and Schema Complexity",
-      "status": "pass",
-      "score": 4,
-      "reason": "No stored procedures or proprietary SQL. All business logic in application layer."
-    },
-    {
-      "question_id": "SEC-Q1",
-      "category_id": "SEC",
-      "title": "Audit Logging",
-      "status": "not_evaluated_surface_flag",
-      "score": null,
-      "reason": "Application-level IaC only. CloudTrail is account-level and belongs in foundation infrastructure repo."
-    }
+    {"question_id": "INF-Q1", "category_id": "INF", "title": "Managed Compute", "status": "pass", "score": 4, "reason": "Score 4 — all compute is managed: AWS::AppRunner::Service pulling from ECR with a VPC connector; no EC2 instance, launch template, or ASG anywhere in the IaC."},
+    {"question_id": "INF-Q2", "category_id": "INF", "title": "Managed Databases", "status": "pass", "score": 4, "reason": "Score 4 — production data is in RDS MySQL 8.4.8 with MultiAZ true, StorageEncrypted, DeletionProtection, and automated backups. The only self-hosted MySQL is the local docker-compose dev stack."},
+    {"question_id": "INF-Q9", "category_id": "INF", "title": "High Availability and Fault Isolation", "status": "pass", "score": 4, "reason": "Score 4 — RDS MultiAZ true with a DB subnet group spanning two AZs; the App Runner VPC connector is attached to both subnets and instances are replaced across AZs up to MaxSize 3."},
+    {"question_id": "DATA-Q4", "category_id": "DATA", "title": "Stored Procedures and Schema Complexity", "status": "pass", "score": 4, "reason": "Score 4 — no stored procedures, triggers, or proprietary SQL. Schema is nine portable CREATE TABLE statements; all business logic (fraud scoring, warehouse selection, carrier rates, refunds) is in PHP. Engine is open-source MySQL."},
+    {"question_id": "SEC-Q1", "category_id": "SEC", "title": "Audit Logging", "status": "not_evaluated_surface_flag", "score": null, "reason": "Application-level IaC only (VPC, RDS, ECR, App Runner, WAF, IAM for one service) with no account-level resources. CloudTrail is an account/organization-level concern belonging to the foundation infrastructure repo."}
   ],
   "pathways": [
     {
-      "id": "move-to-cloud-native",
-      "name": "Move to Cloud Native",
-      "status": "Triggered",
-      "priority": "High",
-      "effort": "High",
-      "key_trigger_criteria": "APP-Q2=1 (primary) AND APP-Q3=1, APP-Q4=1 (supporting)",
+      "id": "move-to-cloud-native", "name": "Move to Cloud Native", "status": "Triggered", "priority": "High", "effort": "High",
+      "key_trigger_criteria": "APP-Q2 < 3 (primary) AND at least one of INF-Q1 < 3, APP-Q3 < 3, APP-Q4 < 3",
       "triggering_questions": [
-        {
-          "question_id": "APP-Q2",
-          "score": 1,
-          "note": "Tightly-coupled monolith with no module boundaries"
-        },
-        {
-          "question_id": "APP-Q3",
-          "score": 1,
-          "note": "All communication synchronous with no async patterns"
-        },
-        {
-          "question_id": "APP-Q4",
-          "score": 1,
-          "note": "Long-running operations handled synchronously"
-        }
+        {"question_id": "APP-Q2", "score": 1, "note": "Primary — single-file monolith, seven domains, one shared schema, no module boundaries"},
+        {"question_id": "APP-Q3", "score": 1, "note": "Supporting — fully synchronous communication, no async patterns"},
+        {"question_id": "APP-Q4", "score": 1, "note": "Supporting — no async job infrastructure for any long-running operation"}
       ],
       "detail": {
-        "current_state": "Single 3193-line PHP monolith with all business domains tightly coupled. No module boundaries, shared database.",
-        "recommended_services": [
-          "Lambda",
-          "API Gateway",
-          "Step Functions",
-          "EventBridge",
-          "ECS/Fargate",
-          "SQS"
-        ],
-        "recommended_patterns": [
-          "Strangler Fig",
-          "Anti-corruption Layer",
-          "Saga Pattern",
-          "Event Sourcing",
-          "Hexagonal Architecture"
-        ],
+        "current_state": "3,192-line index.php containing router, nine-table schema bootstrap, all business logic and the UI; eight-step fulfillment workflow implemented as synchronous handlers; already containerized on App Runner so no compute migration is required first.",
+        "recommended_aws_services": ["AWS Lambda", "Amazon API Gateway", "AWS Step Functions", "Amazon EventBridge", "Amazon ECS/Fargate"],
+        "recommended_patterns": ["Strangler Fig", "Anti-corruption Layer", "Saga", "Event Sourcing", "Hexagonal Architecture"],
         "immediate_actions": [
-          "Establish CI/CD pipeline",
-          "Add integration tests",
-          "Restructure into modular monolith",
-          "Extract fulfillment workflow to Step Functions"
+          "Extract the schema bootstrap into versioned migrations so a second deployable can share the database safely.",
+          "Introduce an Anti-corruption Layer in front of the orders/order_status_history tables before the first extraction.",
+          "Add integration tests for the fulfillment happy path (OPS-Q6 = 1) before any extraction begins."
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/CMK2J48MVN",
+          "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html"
         ]
-      },
-      "not_triggered_reason": null
+      }
     },
     {
-      "id": "move-to-containers",
-      "name": "Move to Containers",
-      "status": "Not Triggered",
-      "priority": null,
-      "effort": null,
-      "key_trigger_criteria": "INF-Q1=4 \u2014 compute already on managed App Runner; Dockerfile exists",
+      "id": "move-to-containers", "name": "Move to Containers", "status": "Not Triggered", "priority": null, "effort": null,
+      "key_trigger_criteria": "INF-Q1 < 3 AND no container definitions found",
+      "triggering_questions": [{"question_id": "INF-Q1", "score": 4, "note": "INF-Q1 = 4 meets threshold; workload is already containerized and running on managed compute"}],
+      "not_triggered_reason": "Contextual guard: compute already runs on AWS App Runner from ECR with a Dockerfile present; the pathway must not be recommended to workloads that have moved beyond EC2/VM compute.",
+      "detail": null
+    },
+    {
+      "id": "move-to-open-source", "name": "Move to Open Source", "status": "Not Triggered", "priority": null, "effort": null,
+      "key_trigger_criteria": "DATA-Q4 < 3 AND commercial DB engines detected",
+      "triggering_questions": [{"question_id": "DATA-Q4", "score": 4, "note": "DATA-Q4 = 4 meets threshold; no stored procedures, triggers, or proprietary SQL"}],
+      "not_triggered_reason": "No commercial database engine detected — the engine is open-source MySQL 8.4.8 on RDS, and no Oracle or SQL Server reference exists in IaC or source.",
+      "detail": null
+    },
+    {
+      "id": "move-to-managed-databases", "name": "Move to Managed Databases", "status": "Not Triggered", "priority": null, "effort": null,
+      "key_trigger_criteria": "INF-Q2 < 3 (primary); DATA-Q3 < 3 strengthens",
       "triggering_questions": [
-        {
-          "question_id": "INF-Q1",
-          "score": 4,
-          "note": "Compute already on managed App Runner \u2014 container pathway not needed"
-        }
+        {"question_id": "INF-Q2", "score": 4, "note": "INF-Q2 = 4 meets threshold; production database is managed RDS MySQL with MultiAZ failover"},
+        {"question_id": "DATA-Q3", "score": 3, "note": "DATA-Q3 = 3 meets threshold; engine version pinned at 8.4.8 and not near EOL"}
       ],
-      "detail": null,
-      "not_triggered_reason": "Workload already runs on App Runner (managed container service). Dockerfile exists and is deployed via ECR."
+      "not_triggered_reason": "Production data already runs on a fully managed, Multi-AZ RDS instance; the only self-hosted MySQL is the local development docker-compose service.",
+      "detail": null
     },
     {
-      "id": "move-to-open-source",
-      "name": "Move to Open Source",
-      "status": "Not Triggered",
-      "priority": null,
-      "effort": null,
-      "key_trigger_criteria": "DATA-Q4=4 \u2014 no stored procedures; MySQL is already open source",
-      "triggering_questions": [
-        {
-          "question_id": "DATA-Q4",
-          "score": 4,
-          "note": "No stored procedures or proprietary SQL"
-        }
-      ],
-      "detail": null,
-      "not_triggered_reason": "Database engine is MySQL (already open source). No stored procedures or proprietary SQL detected."
+      "id": "move-to-managed-analytics", "name": "Move to Managed Analytics", "status": "Not Triggered", "priority": null, "effort": null,
+      "key_trigger_criteria": "INF-Q4 < 3 (primary) AND evidence of data processing workloads must exist",
+      "triggering_questions": [{"question_id": "INF-Q4", "score": 2, "note": "INF-Q4 = 2 is below threshold but the contextual guard blocks the pathway"}],
+      "not_triggered_reason": "Contextual guard: no streaming, ETL, data-pipeline, or analytics artifacts were found (searched infrastructure/, index.php, docker-compose.yml). The system is an OLTP CRUD application with no data processing responsibilities, and no self-managed broker exists to migrate.",
+      "detail": null
     },
     {
-      "id": "move-to-managed-databases",
-      "name": "Move to Managed Databases",
-      "status": "Not Triggered",
-      "priority": null,
-      "effort": null,
-      "key_trigger_criteria": "INF-Q2=4 \u2014 database is already fully managed RDS",
+      "id": "move-to-modern-devops", "name": "Move to Modern DevOps", "status": "Triggered", "priority": "High", "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10 < 3 OR INF-Q11 < 3 (primary); OPS-Q5 < 3 and OPS-Q6 < 3 strengthen",
       "triggering_questions": [
-        {
-          "question_id": "INF-Q2",
-          "score": 4,
-          "note": "Database already fully managed RDS MySQL with Multi-AZ"
-        }
-      ],
-      "detail": null,
-      "not_triggered_reason": "Database is already fully managed RDS MySQL with Multi-AZ, automated backups, and enhanced monitoring."
-    },
-    {
-      "id": "move-to-managed-analytics",
-      "name": "Move to Managed Analytics",
-      "status": "Not Triggered",
-      "priority": null,
-      "effort": null,
-      "key_trigger_criteria": "No data processing workloads exist (contextual guard blocks)",
-      "triggering_questions": [
-        {
-          "question_id": "INF-Q4",
-          "score": 1,
-          "note": "Score < 3 but contextual guard blocks: no streaming/ETL/analytics workloads found"
-        }
-      ],
-      "detail": null,
-      "not_triggered_reason": "No data processing workloads exist in this repository. No streaming, ETL, data pipeline, or analytics artifacts found during discovery. This is a CRUD e-commerce application."
-    },
-    {
-      "id": "move-to-modern-devops",
-      "name": "Move to Modern DevOps",
-      "status": "Triggered",
-      "priority": "High",
-      "effort": "Medium",
-      "key_trigger_criteria": "INF-Q11=1 (primary); OPS-Q5=1, OPS-Q6=1 (supporting)",
-      "triggering_questions": [
-        {
-          "question_id": "INF-Q11",
-          "score": 1,
-          "note": "No CI/CD pipeline \u2014 all deployments manual"
-        },
-        {
-          "question_id": "OPS-Q5",
-          "score": 1,
-          "note": "Direct-to-production deployment with no staged rollout"
-        },
-        {
-          "question_id": "OPS-Q6",
-          "score": 1,
-          "note": "No automated tests of any kind"
-        }
+        {"question_id": "INF-Q11", "score": 1, "note": "Primary — no CI/CD pipeline of any kind; manual docker push and update-stack"},
+        {"question_id": "OPS-Q5", "score": 2, "note": "Supporting — rolling deploy with health checks but no traffic shifting or automated rollback"},
+        {"question_id": "OPS-Q6", "score": 1, "note": "Supporting — no automated tests anywhere in the repository"}
       ],
       "detail": {
-        "current_state": "No CI/CD, manual bash script deployment, no tests, no deployment strategy",
-        "recommended_services": [
-          "CodeBuild",
-          "CodePipeline",
-          "CodeDeploy",
-          "CloudFormation",
-          "ECR",
-          "CloudWatch",
-          "X-Ray"
-        ],
+        "current_state": "IaC coverage is good for primary resources (INF-Q10 = 3) but absent for alarms, backup plans, secrets, and pipelines. No pipeline exists; deploy.sh is a local docker-compose script and the template documents manual deployment steps. App Runner provides rolling replacement with health checks but no traffic shifting. Zero automated tests.",
+        "recommended_aws_services": ["AWS CodePipeline", "AWS CodeBuild", "AWS CodeDeploy", "AWS CloudFormation", "AWS CDK", "Amazon CloudWatch", "AWS X-Ray"],
+        "recommended_patterns": ["Pipeline-as-code", "Blue/green deployment with alarm-based rollback", "Test pyramid with CI-gated integration tests"],
         "immediate_actions": [
-          "Create CI/CD pipeline with CodePipeline + CodeBuild",
-          "Enable App Runner auto-deploy from ECR",
-          "Add integration tests",
-          "Add security scanning to pipeline"
+          "Add a pipeline with build, test, ECR push, and CloudFormation deploy stages, replacing the manual update-stack instructions.",
+          "Add PHP linting and an integration test stage against an ephemeral MySQL container.",
+          "Extend the template with CloudWatch alarms and an AWS Backup plan so the operational surface is code-covered.",
+          "Add SAST and dependency scanning gates (SEC-Q7 = 2)."
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
+          "https://skillbuilder.aws/learn/R4B13K95YQ"
         ]
-      },
-      "not_triggered_reason": null
+      }
     },
     {
-      "id": "move-to-ai",
-      "name": "Move to AI",
-      "status": "Not Triggered",
-      "priority": null,
-      "effort": null,
-      "key_trigger_criteria": "No AI/agent intent evidenced in the repository",
+      "id": "move-to-ai", "name": "Move to AI", "status": "Not Triggered", "priority": null, "effort": null,
+      "key_trigger_criteria": "No AI/agent frameworks, vector DB, RAG, or eval framework — requires AI/agent/LLM intent evidenced in the repository",
       "triggering_questions": [],
-      "detail": null,
-      "not_triggered_reason": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)."
+      "not_triggered_reason": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation). Searched index.php, Dockerfile, docker-compose.yml, and infrastructure/monolith-apprunner.yaml for Bedrock, LLM, GenAI, RAG, vector store, embedding, chatbot, and related terms with no matches.",
+      "detail": null
     }
   ],
   "decomposition_strategy": {
-    "recommended_approach": "Strangler Fig (Parallel Track)",
-    "approaches": [
-      {
-        "name": "Strengthen as Modular Monolith",
-        "effort": "Low (2-6 months)",
-        "recommendation": "Good first step"
-      },
-      {
-        "name": "Strangler Fig (Parallel Track)",
-        "effort": "Medium to High (6-18 months)",
-        "recommendation": "Recommended"
-      },
-      {
-        "name": "Conditional / Adaptive",
-        "effort": "Low to Medium (3-12 months)",
-        "recommendation": "Recommended when capacity constrained"
-      },
-      {
-        "name": "Big-Bang Rewrite",
-        "effort": "Very High (12-24+ months)",
-        "recommendation": "Recommended against"
-      }
+    "trigger": "APP-Q2 = 1 (< 3)",
+    "recommended_approach": "Conditional / Adaptive with Strangler Fig mechanics",
+    "approach_options": [
+      {"approach": "Strengthen as Modular Monolith", "effort": "Low", "recommendation": "Recommended as phase 1 — the file currently has zero boundaries, so modularizing in place is prerequisite work for any other option."},
+      {"approach": "Strangler Fig (Parallel Track)", "effort": "Medium to High", "recommendation": "Recommended as phase 2, starting with the fulfillment workflow, which has the clearest seam and the strongest async case."},
+      {"approach": "Conditional / Adaptive", "effort": "Low to Medium", "recommendation": "Recommended overall — extract only fulfillment and returns, which have genuine independent-scaling and ownership drivers, leaving users and inventory in the monolith."},
+      {"approach": "Big-Bang Rewrite", "effort": "Very High", "recommendation": "Recommended against — with no automated tests a single cutover has no feature-parity safety net, and the domains are identifiable enough for incremental extraction."}
     ],
     "patterns": [
-      "Anti-corruption Layer",
-      "Saga Pattern",
-      "Event Sourcing",
-      "Hexagonal Architecture"
+      {"pattern": "Anti-corruption Layer", "apply_when": "Every extraction — the orders/order_status_history/order_items tables are read by all seven domains and must be fronted by an ACL.", "guidance": "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/strangler-fig.html"},
+      {"pattern": "Saga", "apply_when": "Returns approval (updates returns, payments, and inventory in one request) and order placement (decrements inventory and inserts payments).", "guidance": "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/saga.html"},
+      {"pattern": "Event Sourcing", "apply_when": "order_status_history is already an append-only audit trail and is a natural seed for an event stream consumed by extracted services.", "guidance": "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/event-sourcing.html"},
+      {"pattern": "Hexagonal Architecture", "apply_when": "Every new service — current code has no separation between HTTP handling, business rules, and SQL.", "guidance": "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html"}
     ],
-    "priority_sequence": [
-      "Establish CI/CD pipeline",
-      "Add integration tests",
-      "Restructure into modular PHP files",
-      "Extract fulfillment workflow to Step Functions + Lambda",
-      "Extract remaining domains incrementally"
-    ]
-  },
-  "repo_name": "monolith"
+    "effort_factors": [
+      {"factor": "Module boundaries", "observed": "None — one file, one global scope, shared session state", "effect": "High"},
+      {"factor": "Data coupling", "observed": "Single shared schema with cross-domain joins", "effect": "High"},
+      {"factor": "Stored procedures", "observed": "None — all logic in the application layer", "effect": "Low (favourable)"},
+      {"factor": "Communication patterns", "observed": "Fully synchronous; no messaging primitives", "effect": "High"},
+      {"factor": "CI/CD maturity", "observed": "No pipeline to extend", "effect": "High"},
+      {"factor": "Test coverage", "observed": "No automated tests", "effect": "High"}
+    ],
+    "calibrated_estimate": "Phase 1 (modularize in place, add tests and a pipeline) is Low-to-Medium effort; phase 2 (extract fulfillment and returns) is Medium-to-High. The absence of stored procedures and the existing container/App Runner footprint materially reduce effort."
+  }
 }

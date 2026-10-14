@@ -1,537 +1,104 @@
 {
+  "analysis_type": "ara",
   "repo_name": "modern-catalog-graphql",
   "metadata": {
     "analysis_type": "ara",
-    "analysis_date": "2025-07-14",
+    "analysis_date": "2026-10-13",
     "td_version": "agentic-readiness-analysis",
+    "portfolio_name": "ara",
+    "target_path": "harness/after/_src/ara/modern-catalog-graphql",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
+    "repo_type_justification": "Application source with a deployable entry point (src/server.ts exporting a Lambda handler), a dependency manifest (package.json), and single-service SAM IaC (infra/template.yaml).",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
+    "archetype_justification": "Owns persistent state in a DynamoDB products table and exposes read plus Create/Update/soft-Delete operations with entity lifecycle management via the active flag. No queue consumers and no multi-service fan-out.",
     "agent_scope": "write-enabled",
     "agent_scope_source": "inferred",
-    "portfolio_name": null,
-    "tech_stack": {
-      "language": "TypeScript",
-      "loc": 85,
-      "framework": "Apollo Server 4 + AWS Lambda",
-      "architecture": "Serverless GraphQL (Lambda + API Gateway + DynamoDB)"
-    },
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_http_rpc_surface": true,
       "has_auth_surface": true,
       "has_write_operations": true,
       "has_logging_of_user_data": false
+    },
+    "tech_stack": {
+      "language": "TypeScript (Node.js 20)",
+      "loc": 198,
+      "framework": "Apollo Server 4 (GraphQL) on AWS Lambda",
+      "architecture": "Serverless GraphQL API — API Gateway HTTP API with Cognito JWT authorizer, single Lambda resolver, DynamoDB single-table store, AWS SAM IaC"
     }
   },
   "classification": {
     "tier": "Remediation Required",
     "sub_qualifier": null,
     "blocker_count": 1,
-    "risk_safety_count": 7,
+    "risk_safety_count": 6,
     "risk_quality_count": 10,
-    "info_count": 6,
-    "high_count": 1,
-    "medium_count": 17,
-    "low_count": 6,
-    "rule_matched": "1-2 BLOCKER \u2192 Remediation Required"
+    "info_count": 8,
+    "high_count": 7,
+    "medium_count": 10,
+    "low_count": 8,
+    "rule_matched": "1-2 BLOCKER → Remediation Required"
   },
   "counts": {
-    "total": 24,
-    "high": 1,
-    "medium": 17,
-    "low": 6
+    "total": 25,
+    "high": 7,
+    "medium": 10,
+    "low": 8,
+    "na": 0,
+    "not_evaluated_extended": 2,
+    "pass": 16,
+    "questions_total": 43
   },
   "findings": [
-    {
-      "question_id": "AUTH-Q6",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "Immutable Audit Logging",
-      "description": "No audit logging of the authenticated principal for write operations. The upsertProduct and deleteProduct mutations do not log who performed the action. No CloudTrail configuration in the SAM template. No application-level audit event emission.",
-      "gap": "Write operations execute without recording the authenticated identity. If an agent modifies or deletes catalog data, there is no immutable record of which principal took the action.",
-      "recommendation": "Add an Apollo Server plugin that logs the authenticated principal (from JWT claims), operation name, and mutation variables to a structured CloudWatch log group with 365-day retention. Enable API Gateway access logging.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {
-        "file": "src/resolvers/catalog.ts",
-        "lines": "44-63"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging for write operations",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "AUTH-Q6 fired as BLOCKER because the system exposes write mutations (upsertProduct, deleteProduct) that agents will invoke, yet no audit trail records which principal performed each write.",
-        "blocker_remediation": {
-          "immediate": "Add Apollo Server plugin for audit logging of write operations with principal identity",
-          "target_state": "Every write operation produces an immutable audit record with principal identity, operation, target SKU, and timestamp",
-          "estimated_effort": "Low",
-          "dependencies": []
-        }
-      }
-    },
-    {
-      "question_id": "AUTH-Q4",
-      "category": "Authentication & Authorization",
-      "category_display": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "Identity Propagation and Delegation",
-      "description": "JWT claims are extracted from the API Gateway Cognito authorizer and passed to resolvers as scopes. However, there is no mechanism to distinguish between an agent acting under its own service identity vs. acting on behalf of a specific human user.",
-      "gap": "No explicit distinction between agent-as-self and agent-on-behalf-of-user. All authenticated callers are treated identically based on JWT scopes.",
-      "recommendation": "Implement OAuth2 token exchange or add a custom claim (act claim per RFC 8693) to distinguish delegated calls. Log both the agent identity and the delegating user identity.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "src/server.ts",
-        "lines": "24-30"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Use distinct Cognito app clients for agent identities with narrower scopes",
-          "Include custom X-On-Behalf-Of claim in agent-issued tokens"
-        ]
-      }
-    },
-    {
-      "question_id": "STATE-Q3",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "Concurrency Controls",
-      "description": "DynamoDB writes in upsertProduct use unconditional put (last-write-wins) with no version field, conditional expression, or ETag. deleteProduct uses unconditional update. Multiple concurrent agent instances could overwrite each other's changes silently.",
-      "gap": "No optimistic locking or concurrency controls on write operations.",
-      "recommendation": "Add a version field and use DynamoDB ConditionExpression to implement optimistic locking. Return the version in GraphQL responses.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/resolvers/catalog.ts",
-        "lines": "45-61"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Serialize agent write operations through a queue for critical SKUs",
-          "Limit concurrent agent instances to one"
-        ]
-      }
-    },
-    {
-      "question_id": "STATE-Q4",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "Circuit Breakers and Resilience",
-      "description": "No explicit circuit breaker pattern implemented. The service depends on DynamoDB for all operations. AWS SDK v3 provides default retry with exponential backoff, and Lambda enforces a 30-second timeout, but no circuit breaker prevents cascading failures if DynamoDB experiences sustained degradation.",
-      "gap": "No fail-fast mechanism for sustained DynamoDB degradation. Sustained throttling would cause all Lambda invocations to consume their full timeout.",
-      "recommendation": "Implement a lightweight circuit breaker (e.g., opossum library) around DynamoDB calls that opens after N consecutive failures.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/resolvers/catalog.ts",
-        "lines": "26-61"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Lambda 30s timeout provides hard ceiling on request duration",
-          "AWS SDK default retry with exponential backoff handles transient errors"
-        ]
-      }
-    },
-    {
-      "question_id": "STATE-Q5",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "Rate Limiting and Throttling",
-      "description": "No explicit rate limiting configuration in the SAM template. The API Gateway HTTP API uses AWS account-level default throttling but no per-API, per-route, or per-caller throttle is configured.",
-      "gap": "No explicit rate limits to prevent a runaway agent loop from overwhelming the service.",
-      "recommendation": "Add ThrottlingBurstLimit and ThrottlingRateLimit to the HttpApi resource. Consider WAF rate rules for per-client throttling.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "30 days",
-        "compensating_controls": [
-          "API Gateway account-level default throttle (10,000 rps burst)",
-          "DynamoDB on-demand auto-scales"
-        ]
-      }
-    },
-    {
-      "question_id": "STATE-Q6",
-      "category": "State Management",
-      "category_display": "State & Memory",
-      "category_id": "STATE",
-      "title": "Blast Radius and Transaction Limits",
-      "description": "No business-level transaction limits exist. An agent with catalog:write scope could call upsertProduct or deleteProduct in a loop without any cap on records modified per session or time window.",
-      "gap": "No configurable limits on records modified per agent identity per time window.",
-      "recommendation": "Implement per-caller write quotas (e.g., max 100 upserts/hour per client_id) enforced at the resolver layer.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "src/resolvers/catalog.ts",
-        "lines": "44-61"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Soft-delete design means deletions are recoverable",
-          "DynamoDB Point-in-Time Recovery enables full table restoration"
-        ]
-      }
-    },
-    {
-      "question_id": "HITL-Q1",
-      "category": "Human-in-the-Loop",
-      "category_display": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "Draft/Pending State",
-      "description": "All write operations are immediately committed. upsertProduct immediately persists the product, and deleteProduct immediately soft-deletes. There is no draft, pending, or proposed state for human review.",
-      "gap": "No mechanism for an agent to propose changes that a human can review before they take effect.",
-      "recommendation": "Add a status field to products with values like DRAFT/ACTIVE. Agent-initiated writes create products in DRAFT status requiring human promotion.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/resolvers/catalog.ts",
-        "lines": "44-49"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Soft-delete is recoverable (not permanent)",
-          "Scope-gating ensures only catalog:write holders can mutate"
-        ]
-      }
-    },
-    {
-      "question_id": "HITL-Q2",
-      "category": "Human-in-the-Loop",
-      "category_display": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "Configurable Approval Gates",
-      "description": "No configurable approval gates exist. All mutations execute immediately upon receiving a valid authenticated request with the required scope.",
-      "gap": "Cannot configure specific operations to require human approval before execution.",
-      "recommendation": "Implement a configurable approval workflow for high-risk operations (e.g., bulk updates, deletes above a threshold).",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "src/resolvers/catalog.ts",
-        "lines": "44-61"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Scope-based authorization limits who can invoke mutations",
-          "Soft-delete design means no irreversible data loss"
-        ]
-      }
-    },
     {
       "question_id": "API-Q3",
       "category": "API Surface",
       "category_display": "API & Tooling",
       "category_id": "API",
       "title": "Structured Error Responses",
-      "description": "Error handling relies on Apollo Server's default error formatting. Authorization errors throw Error('forbidden: requires scope ...') without custom error codes. DynamoDB SDK errors propagate without structured classification.",
-      "gap": "No custom GraphQL error codes, no retryable indicator. Agents cannot programmatically distinguish retriable from terminal errors.",
-      "recommendation": "Add a custom Apollo error formatter that maps errors to structured codes (FORBIDDEN, NOT_FOUND, THROTTLED, INTERNAL) with a retryable boolean in extensions.",
+      "description": "The only application-authored error is `throw new Error(`forbidden: requires scope ${scope}`)` in requireScope (src/resolvers/catalog.ts). A bare Error surfaces through Apollo Server 4 as extensions.code INTERNAL_SERVER_ERROR — the same code an unexpected crash produces — so an agent cannot distinguish an authorization denial (terminal) from a transient fault (retriable). No GraphQLError with a domain-specific code is used anywhere, there is no retryable flag or category, and DynamoDB SDK errors (throttling, conditional-check failures) propagate unmapped.",
+      "gap": "No machine-readable error taxonomy and no retriable-vs-terminal signal. The GraphQL envelope is structured but the codes inside it are not.",
+      "recommendation": "Throw GraphQLError with explicit extensions { code: 'FORBIDDEN' | 'NOT_FOUND' | 'CONFLICT' | 'THROTTLED', retryable: boolean }, and wrap DynamoDB calls to map ProvisionedThroughputExceededException and ConditionalCheckFailedException onto THROTTLED / CONFLICT.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "src/resolvers/catalog.ts",
-        "lines": "18-21"
+        "lines": "17-21"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
         "remediation_timeline": "30 days",
         "compensating_controls": [
-          "GraphQL standard error format provides message and locations",
-          "Apollo Server 4 includes extensions.code for built-in errors"
+          "Have the agent treat all catalog errors as terminal (no retry) during the pilot, accepting lost work on transient faults.",
+          "Add an Apollo formatError hook mapping error messages to codes as a stopgap without touching resolvers."
         ]
       }
     },
     {
-      "question_id": "DATA-Q5",
-      "category": "Data Accessibility",
-      "category_display": "Data Access",
-      "category_id": "DATA",
-      "title": "Temporal Metadata and Freshness",
-      "description": "Products have an updatedAt field set to ISO 8601 UTC. However, there is no createdAt field and no response-level freshness signaling (Cache-Control, staleness indicators).",
-      "gap": "Partial temporal metadata \u2014 no creation timestamp, no freshness signaling.",
-      "recommendation": "Add a createdAt field populated on first insert. Consider freshness headers in GraphQL responses.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "src/resolvers/catalog.ts",
-        "lines": "46"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30 days",
-        "compensating_controls": [
-          "updatedAt provides last-modification time in UTC",
-          "DynamoDB strongly consistent reads available"
-        ]
-      }
-    },
-    {
-      "question_id": "DISC-Q1",
-      "category": "Discovery & Documentation",
-      "category_display": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "Schema Versioning and API Contracts",
-      "description": "A GraphQL schema file exists providing a documented API contract. However, there is no schema versioning strategy, no breaking-change detection tooling, no changelog, and no contract tests.",
-      "gap": "Schema changes could break agent tool bindings without detection.",
-      "recommendation": "Add a schema comparison step to CI (e.g., graphql-inspector) that detects breaking changes. Maintain a schema changelog.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "schema/catalog.graphql",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "GraphQL supports additive changes without breaking clients",
-          "Schema-first approach means schema file is source of truth"
-        ]
-      }
-    },
-    {
-      "question_id": "OBS-Q1",
-      "category": "Observability",
-      "category_display": "Observability",
-      "category_id": "OBS",
-      "title": "Distributed Tracing and Structured Logging",
-      "description": "X-Ray tracing is active (Tracing: Active in SAM Globals). However, no structured JSON logging library is installed or configured. No explicit logging statements, request correlation IDs, or structured log output in the codebase.",
-      "gap": "Tracing present but structured logging with correlation IDs is absent.",
-      "recommendation": "Add @aws-lambda-powertools/logger for structured JSON logs with trace ID and request ID. Add an Apollo Server plugin for request-level logging.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30 days",
-        "compensating_controls": [
-          "X-Ray traces provide request-level visibility",
-          "Lambda automatically logs invocation start/end with request ID"
-        ]
-      }
-    },
-    {
-      "question_id": "OBS-Q2",
-      "category": "Observability",
-      "category_display": "Observability",
-      "category_id": "OBS",
-      "title": "Alerting on Error Rates and Latency",
-      "description": "No CloudWatch alarms or alerting configuration defined in the SAM template. No anomaly detection, no integration with alerting services.",
-      "gap": "No alerting to detect when the API is degraded for agents.",
-      "recommendation": "Add CloudWatch alarms for Lambda error rate > 5%, p99 latency > 5s, and DynamoDB throttled requests > 0.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30 days",
-        "compensating_controls": [
-          "CloudWatch automatically collects Lambda metrics",
-          "X-Ray provides service map for manual investigation"
-        ]
-      }
-    },
-    {
-      "question_id": "ENG-Q1",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "Infrastructure Governance for Agent-Facing Surface",
-      "description": "Infrastructure is defined as code (SAM template.yaml) defining API Gateway, Lambda, and DynamoDB. However, no peer review enforcement and no drift detection are present.",
-      "gap": "IaC exists (1/3 governance sub-checks) but no automated review enforcement or drift detection.",
-      "recommendation": "Add a CI/CD pipeline with required PR reviews for IaC changes. Enable AWS Config rules for drift detection.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "SAM template provides reproducible deployments",
-          "CloudFormation detects drift on demand"
-        ]
-      }
-    },
-    {
-      "question_id": "ENG-Q2",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "CI/CD with API Contract Testing",
-      "description": "No CI/CD pipeline configuration files found in the repository. package.json defines build, test, and lint scripts for local development only.",
-      "gap": "No automated pipeline to catch API-breaking changes before deployment.",
-      "recommendation": "Add a CI/CD pipeline that runs lint, test, build, and schema comparison on every PR.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "package.json",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30 days",
-        "compensating_controls": [
-          "Local test/build/lint scripts exist",
-          "GraphQL schema-first approach makes changes explicit"
-        ]
-      }
-    },
-    {
-      "question_id": "ENG-Q3",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "Rollback Capability",
-      "description": "No explicit rollback configuration. No blue/green deployment, no canary, no CodeDeploy. CloudFormation provides implicit rollback only on stack update failure.",
-      "gap": "No fast rollback mechanism for successful-but-broken deployments.",
-      "recommendation": "Enable Lambda DeploymentPreference with canary/linear and automatic rollback on CloudWatch alarm trigger.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "CloudFormation auto-rollback on update failure",
-          "Lambda versioning could be enabled"
-        ]
-      }
-    },
-    {
-      "question_id": "ENG-Q4",
-      "category": "Engineering Maturity",
-      "category_display": "Engineering Practices",
-      "category_id": "ENG",
-      "title": "API Test Coverage",
-      "description": "vitest is configured as a dev dependency with a test script, but no test files exist in the repository. Zero automated test coverage.",
-      "gap": "No tests for the APIs agents will consume.",
-      "recommendation": "Add resolver unit tests covering successful queries, pagination, scope enforcement, error responses, and idempotent upsert.",
-      "severity": "Medium",
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "Structured Response Format",
+      "description": "Responses are JSON over a GraphQL envelope. Apollo Server 4 (@apollo/server ^4.10.0) serializes to application/json via @as-integrations/aws-lambda, and all scalar types in schema/catalog.graphql are LLM-friendly primitives (ID, String, Int, Boolean). No binary payloads, no XML, and no Protobuf/Thrift definitions exist in the repository.",
+      "gap": "None — the format requires no parsing adapter for agent tooling.",
+      "recommendation": "No change required. When defining agent tools, pin explicit field selections rather than requesting every Product field, to keep responses inside the context window.",
+      "severity": "Low",
       "priority": "P3",
-      "effort": "Medium",
-      "phase": 3,
+      "effort": "Low",
+      "phase": 4,
       "evidence": {
-        "file": "package.json",
-        "lines": null
+        "file": "src/server.ts",
+        "lines": "18-20"
       },
       "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "GraphQL schema validation provides type safety",
-          "TypeScript provides static type checking"
-        ]
-      }
-    },
-    {
-      "question_id": "HITL-Q3",
-      "category": "Human-in-the-Loop",
-      "category_display": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "Sandbox/Staging Environment",
-      "description": "No sandbox or staging environment configuration in the repository. No docker-compose for local testing, no seed data scripts, no environment-specific configurations.",
-      "gap": "No safe environment to test agent behavior before production.",
-      "recommendation": "Add samconfig.toml with staging/production environments. Add docker-compose with DynamoDB Local for local agent testing.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "package.json",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "SAM template can be deployed to multiple environments",
-          "DynamoDB Local available for local testing"
-        ]
+        "native_severity": "INFO",
+        "safety_impact": false
       }
     },
     {
@@ -540,16 +107,16 @@
       "category_display": "API & Tooling",
       "category_id": "API",
       "title": "Event Emission for State Changes",
-      "description": "No event emission for state changes. Product upserts and soft-deletes do not publish events to SNS, EventBridge, SQS, or any event bus.",
-      "gap": "No reactive event surface for downstream consumers or agents.",
-      "recommendation": "Add EventBridge integration to emit events on product create/update/delete.",
+      "description": "No event emission exists. infra/template.yaml declares no SNS topic, no EventBridge rule, no SQS queue, and no StreamSpecification on ProductsTable, so DynamoDB Streams/CDC is off. src/resolvers/catalog.ts publishes nothing after a write, schema/catalog.graphql defines no Subscription type, and package.json declares no messaging client.",
+      "gap": "Agents reacting to catalog changes must poll the products query, which combines poorly with the absent throttling (STATE-Q5) and the uncapped limit argument (STATE-Q6).",
+      "recommendation": "If event-reactive agents are a target, enable StreamSpecification with NEW_AND_OLD_IMAGES on ProductsTable and fan out to EventBridge — this would also give the AUTH-Q6 audit trail a natural data-plane source.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Medium",
       "phase": 3,
       "evidence": {
-        "file": "src/resolvers/catalog.ts",
-        "lines": "44-61"
+        "file": "infra/template.yaml",
+        "lines": "17-24"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -562,20 +129,255 @@
       "category_display": "API & Tooling",
       "category_id": "API",
       "title": "Rate Limit Documentation and Headers",
-      "description": "No rate limit documentation or headers. The API does not return X-RateLimit-Remaining, Retry-After, or similar headers.",
-      "gap": "Agents cannot self-throttle based on remaining capacity.",
-      "recommendation": "Document rate limits in schema description. Configure API Gateway to return throttling headers.",
+      "description": "No limits are documented or signalled. The CatalogApi HttpApi in infra/template.yaml has no throttle settings and no usage plan; src/server.ts sets no response headers, so no X-RateLimit-Remaining or Retry-After reaches the caller; README.md documents no rate limits. The only effective ceilings are account-level Lambda concurrency and DynamoDB on-demand defaults, neither visible to a caller.",
+      "gap": "An agent has no feedback channel to self-throttle and will discover limits only as unexplained failures.",
+      "recommendation": "Once stage throttling is configured per STATE-Q5, surface the limit and remaining budget in a GraphQL response extension or HTTP header, and document the published limits in README.md.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
       "evidence": {
         "file": "infra/template.yaml",
-        "lines": null
+        "lines": "37-48"
       },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Identity Propagation and Delegation",
+      "description": "src/server.ts reads event.requestContext.authorizer.jwt.claims but keeps only the scope claim, building scopes: new Set(...). The sub, client_id, and any act/on-behalf-of claims are discarded, so resolvers cannot distinguish an agent calling under its own service identity from an agent calling on behalf of a specific human user — both arrive as an indistinguishable bag of scopes. There is no token exchange, no on-behalf-of flow, and no user-context propagation.",
+      "gap": "No actor/subject separation. An agent acting for a low-privilege user is bounded only by the agent's own scopes, not by that user's permissions.",
+      "recommendation": "Propagate sub and client_id into the resolver Context, add an explicit actingOnBehalfOf field populated from an act claim or a token-validated X-On-Behalf-Of-User header, and enforce the intersection of agent scopes and user permissions in requireScope.",
+      "severity": "High",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/server.ts",
+        "lines": "25-32"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Issue a dedicated Cognito app client per agent granted only the scopes its use case requires, so the agent's own ceiling is tight even without user-bounded delegation.",
+          "Restrict the pilot to agent-as-self workflows; forbid on-behalf-of-user catalog mutations until subject/actor separation exists."
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Immutable Audit Logging",
+      "description": "Neither mutation resolver records the authenticated principal. upsertProduct and deleteProduct in src/resolvers/catalog.ts call ctx.db.put / ctx.db.update and return immediately — no log statement, no audit record, and no actor attribute on the item (only updatedAt). src/server.ts extracts JWT claims but discards sub and client_id, so the principal is not even available to a downstream audit writer. infra/template.yaml contains no AWS::CloudTrail::Trail, no log-file validation, no S3 Object Lock log target, and no CloudWatch log-group retention policy; the only observability configured is sampled X-Ray tracing. README.md acknowledges the gap narrowly for deleteProduct; it is in fact total across both write paths.",
+      "gap": "No principal attribution on any write operation and no immutable or tamper-evident log store. Agent-initiated mutations cannot be attributed or forensically reconstructed.",
+      "recommendation": "Carry claims.sub and claims.client_id into the resolver context and emit a structured audit record (principal, operation, SKU, before/after active, timestamp, request id) per write to a dedicated CloudWatch log group or DynamoDB audit table; add a CloudTrail trail with LogFileValidationEnabled and DynamoDB data events delivering to an S3 bucket with Object Lock.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/resolvers/catalog.ts",
+        "lines": "44-70"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no principal attribution on writes AND no immutable/tamper-evident log store.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "agent_scope was inferred as write-enabled because has_write_operations is true (upsertProduct and deleteProduct mutate the DynamoDB products table). Under write-enabled scope AUTH-Q6 is a BLOCKER, and the control is wholly absent: no log statement exists in either mutation resolver, the identity claims are discarded in src/server.ts, and infra/template.yaml provisions no CloudTrail trail, log-file validation, Object Lock target, or log retention policy.",
+        "blocker_remediation": {
+          "immediate": "In src/server.ts carry claims.sub and claims.client_id into the resolver context, and in both mutation resolvers emit a structured audit record (principal, operation, SKU, before/after active, timestamp, request id).",
+          "target_state": "Every write carries principal attribution; audit records land in an append-only store (CloudWatch Logs with retention plus a CloudTrail trail with LogFileValidationEnabled delivering to an Object Lock S3 bucket), and DynamoDB data-plane writes are captured via CloudTrail data events on the products table.",
+          "estimated_effort": "Low",
+          "dependencies": [
+            "OBS-Q1",
+            "AUTH-Q4"
+          ]
+        }
+      }
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Concurrency Controls",
+      "description": "upsertProduct issues an unconditional ctx.db.put with no ConditionExpression, no version attribute, and no If-Match/ETag equivalent in the GraphQL schema; deleteProduct issues an unconditional update SET active = :f. The Product type in schema/catalog.graphql exposes updatedAt but no version field, so a caller has no token to condition on. Two concurrent agent instances upserting the same SKU produce silent last-writer-wins, and a concurrent upsert and soft-delete can resurrect a deleted product.",
+      "gap": "No optimistic locking on a write surface an agent may drive concurrently at machine speed.",
+      "recommendation": "Add a version: Int! attribute to Product and UpsertProductInput and convert both mutations to DynamoDB conditional writes (ConditionExpression: 'attribute_not_exists(sku) OR version = :expected'), returning a structured conflict error on failure.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/resolvers/catalog.ts",
+        "lines": "46-70"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "agent_scope": "write-enabled",
+        "conditional_resolution": "Scope-calibrated: agent_scope=write-enabled, so STATE-Q3 evaluates as RISK rather than INFO.",
+        "resolution_reasoning": "has_write_operations is true, so write-path concurrency is live risk rather than a future-scope consideration.",
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Serialize agent writes per SKU at the orchestration layer (single agent instance per catalog partition) during the pilot.",
+          "Exclude actively merchandised SKUs from the agent's scope so last-writer-wins cannot collide with human editing."
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Rate Limiting and Throttling",
+      "description": "The CatalogApi HTTP API in infra/template.yaml declares only Auth — no RouteSettings/DefaultRouteSettings with ThrottlingBurstLimit or ThrottlingRateLimit, no usage plan, no WAF web ACL — and package.json declares no rate-limiting middleware or Apollo rate-limit plugin. Compounding this, src/server.ts installs no query depth or complexity limit, so a single deeply nested GraphQL document is both unthrottled and unbounded in cost; README.md and the src/server.ts header comment both acknowledge this.",
+      "gap": "A runaway agent loop, or one expensive query, can exhaust Lambda concurrency and DynamoDB on-demand capacity with nothing in front of it.",
+      "recommendation": "Add DefaultRouteSettings throttling to CatalogApi and install graphql-depth-limit plus an Apollo cost-analysis plugin in src/server.ts as the file's own header comment prescribes.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/template.yaml",
+        "lines": "37-48"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Set reserved concurrency on CatalogFunction so a runaway loop cannot consume account-wide Lambda concurrency.",
+          "Apply a stage-level API Gateway throttle plus a CloudWatch alarm on throttle and 5XX counts for the pilot window."
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Blast Radius and Transaction Limits",
+      "description": "No business-domain caps exist for any caller. schema/catalog.graphql exposes only single-SKU mutations (no bulk upsert or bulk delete), which caps one call, but nothing caps a session: an agent can call deleteProduct once per SKU in a loop and soft-delete the entire catalog. There is no per-identity maximum records modified, no mutations-per-hour ceiling, and no spend threshold. On the read side products(limit: Int = 50) has a default but no enforced maximum — limit is passed straight through to the DynamoDB Limit in src/resolvers/catalog.ts.",
+      "gap": "Only per-operation scope is bounded; cumulative per-caller business impact is unbounded. API-layer throttling (also absent) would bound request rate, not business consequence.",
+      "recommendation": "Add a per-principal mutation budget (e.g., a DynamoDB counter keyed on client_id and hour, checked in requireScope or a dedicated guard) and clamp limit in the products resolver to a hard maximum.",
+      "severity": "High",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/resolvers/catalog.ts",
+        "lines": "31-43"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "agent_scope": "write-enabled",
+        "conditional_resolution": "Scope-calibrated: agent_scope=write-enabled, so STATE-Q6 evaluates as RISK rather than INFO.",
+        "resolution_reasoning": "has_write_operations is true, so an agent can modify and soft-delete catalog records in a loop; business-impact caps are therefore live risk.",
+        "remediation_timeline": "60 days",
+        "compensating_controls": [
+          "Cap the agent's planning loop (max mutations per run) at the orchestration layer and alarm on DynamoDB UpdateItem count per hour.",
+          "Rely on PointInTimeRecovery on ProductsTable plus the soft-delete semantics for recoverability — damage limitation, not prevention."
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Draft/Pending State",
+      "description": "Product in schema/catalog.graphql carries a two-valued active: Boolean! and nothing else resembling a lifecycle state — no status enum, no DRAFT/PENDING_REVIEW value, no separate staging table. upsertProduct in src/resolvers/catalog.ts hardcodes active: true on every write, so a write is live the instant it commits, and there is no create-then-confirm operation pair. active: false is a delete marker, not a reviewable pre-commit state.",
+      "gap": "No mechanism for an agent to propose a catalog change without immediately publishing it.",
+      "recommendation": "Replace active: Boolean! with a status: ProductStatus! enum (DRAFT, PUBLISHED, ARCHIVED), default agent-originated upserts to DRAFT, and add a publishProduct(sku) mutation gated on a distinct scope.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "schema/catalog.graphql",
+        "lines": "7-16"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "agent_scope": "write-enabled",
+        "conditional_resolution": "Scope-calibrated: agent_scope=write-enabled, so HITL-Q1 evaluates as RISK rather than INFO.",
+        "resolution_reasoning": "has_write_operations is true, so agent-proposed catalog changes would commit live with no reviewable intermediate state.",
+        "remediation_timeline": "60 days",
+        "compensating_controls": [
+          "Have the agent write proposals to a separate non-customer-facing store or SQS queue, with a human-triggered job calling upsertProduct, keeping the agent out of the live write path.",
+          "Restrict the agent's Cognito app client to read scopes and run the pilot in propose-only mode."
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Configurable Approval Gates",
+      "description": "No approval surface exists. schema/catalog.graphql has exactly four operations (product, products, upsertProduct, deleteProduct) — no approve/reject mutation and no confirmation step. infra/template.yaml contains no Step Functions state machine (hence no waitForTaskToken human-approval task) and no per-operation feature flags or parameters. requireScope in src/resolvers/catalog.ts is a binary allow/deny on catalog:write and cannot route an operation to a human.",
+      "gap": "Operations cannot be configured to require human approval per operation type, so there is no application-layer defense in depth behind the orchestration layer.",
+      "recommendation": "Introduce an operation-level policy map (operation name → requires_approval) consulted in the resolvers, backed by the DRAFT/publishProduct split recommended for HITL-Q1 so gated operations have somewhere to park.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "schema/catalog.graphql",
+        "lines": "35-40"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "agent_scope": "write-enabled",
+        "conditional_resolution": "Scope-calibrated: agent_scope=write-enabled, so HITL-Q2 evaluates as RISK rather than INFO.",
+        "resolution_reasoning": "has_write_operations is true and deleteProduct is agent-invocable, so the absence of any configurable approval gate is a live safety risk.",
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Implement the approval gate in the agent orchestration layer (human confirmation before any deleteProduct tool call) and accept it as the only gate during the pilot.",
+          "Grant catalog:write only to an app client used by a supervised workflow so every mutation is human-initiated."
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Sandbox/Staging Environment",
+      "description": "The repository contains no second environment. infra/template.yaml takes a single UserPoolId parameter and declares no stage/environment parameter, no environment mappings, and no Conditions. There is no docker-compose.yml, no samconfig.toml with multiple deployment profiles, and no seed-data, fixture, or synthetic-data script anywhere in the tree (the complete file set is README.md, package.json, tsconfig.json, infra/template.yaml, schema/catalog.graphql, src/server.ts, src/resolvers/catalog.ts).",
+      "gap": "No production-shaped environment in which agent behaviour against the catalog can be exercised before it touches live data.",
+      "recommendation": "Add an Environment parameter to the template, commit a samconfig.toml with staging and prod profiles, and add a seed script that populates a representative SKU set.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/template.yaml",
+        "lines": "53-55"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Deploy a second stack of the same template under a catalog-staging stack name with its own table and test app client — the template already supports this.",
+          "Run agent rehearsals against a locally mocked DynamoDBDocument via the existing vitest setup."
+        ]
       }
     },
     {
@@ -584,23 +386,67 @@
       "category_display": "Data Access",
       "category_id": "DATA",
       "title": "Sensitive Data Classification",
-      "description": "Product catalog data (SKU, name, description, price, currency, active status) contains no PII, PHI, financial records, or credentials. Not a data-handling target for sensitive data.",
-      "gap": "None \u2014 no sensitive data present in this system.",
-      "recommendation": "Monitor schema evolution \u2014 re-evaluate if user-specific or regulated data is added.",
+      "description": "Stage A scope gate resolved to No. ProductsTable is keyed on sku and the Product type in schema/catalog.graphql holds only product-merchandising attributes (sku, name, description, priceCents, currency, active, updatedAt). There is no user identifier, email, phone, address, account detail, health record, payment instrument, or persisted credential; priceCents is a product list price, not a financial instrument. has_logging_of_user_data is false (no log statements exist in src/), so no request bodies are captured, and a product catalog is not a regulated data domain. Stage B is therefore skipped per the rubric and absence of classification controls is not flagged.",
+      "gap": "No formal classification metadata (B3-class), which the rubric treats as aspirational and which is moot while Stage A is No.",
+      "recommendation": "Re-run this question if the schema gains customer-, supplier-, or cost-sensitive fields (e.g., wholesale cost, supplier contacts) — that would flip Stage A to Yes and engage the B1/B2 sub-checks.",
       "severity": "Low",
       "priority": "P0",
       "effort": "Low",
-      "phase": 4,
+      "phase": 3,
       "evidence": {
         "file": "schema/catalog.graphql",
-        "lines": null
+        "lines": "7-15"
       },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false,
-        "conditional_resolution": "Stage A = No: system does not store/process/transmit sensitive data",
+        "conditional_resolution": "Resolved to INFO: Stage A scope gate = No, so the write-enabled conditional BLOCKER does not engage.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "DATA-Q1 Stage A evaluated as No because the product catalog (sku, name, description, priceCents, currency, active, updatedAt) contains no PII, PHI, financial instruments, or credentials."
+        "resolution_reasoning": "agent_scope is write-enabled, which would make B1 a BLOCKER if sensitive fields were exposed. However the Stage A scope gate resolved to No — the only persisted entity is a product-merchandising record with no PII, PHI, financial instrument, or credential, and no user data is logged — so Stage B was not evaluated and DATA-Q1 records as INFO.",
+        "data_q1_subchecks": {
+          "b1": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Not evaluated — Stage A = No. No sensitive field exists that an agent-facing response could leak."
+          },
+          "b2": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Not evaluated — Stage A = No. (Scope differentiation does nonetheless exist: reads are open to authenticated callers, mutations require catalog:write.)"
+          },
+          "b3": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Not evaluated — Stage A = No. No classification tags or field-level sensitivity annotations exist, but this is not flagged for a non-data-handling target."
+          }
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Temporal Metadata and Freshness",
+      "description": "Partial coverage. Product.updatedAt: String! is populated from ctx.now() as new Date().toISOString() in src/server.ts — UTC-normalized and format-consistent. Missing: there is no createdAt or source event time, so an agent cannot tell a brand-new SKU from one edited seconds ago. There is also no freshness or consistency signalling — ctx.db.scan in the products resolver uses DynamoDB's default eventually-consistent read (no ConsistentRead: true), yet the ProductConnection envelope carries only items and nextCursor, with no consistency_level, last_refreshed, Cache-Control, or X-Data-Age anywhere in src/server.ts.",
+      "gap": "Agents receive possibly-stale eventually-consistent reads with no indication that they are stale, and have no creation timestamp to reason with.",
+      "recommendation": "Add createdAt: String! to Product (set on first write only) and a consistency: ConsistencyLevel! field to ProductConnection reflecting whether the underlying read was strong or eventual; consider ConsistentRead: true on the by-SKU lookup.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/resolvers/catalog.ts",
+        "lines": "31-43"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Set ConsistentRead: true on the product by-SKU read so point lookups are authoritative.",
+          "Document the eventual-consistency window in the schema docstring so tool authors encode it into agent prompts."
+        ]
       }
     },
     {
@@ -609,16 +455,65 @@
       "category_display": "Data Access",
       "category_id": "DATA",
       "title": "Data Quality Awareness",
-      "description": "No data quality metrics, completeness monitoring, or profiling for the product catalog.",
-      "gap": "No completeness or quality tracking.",
-      "recommendation": "Add custom metrics for catalog data quality (completeness, anomalies).",
+      "description": "No data-quality instrumentation exists for the products dataset. There are no quality dashboards or profiling reports, no null-rate or completeness monitoring, no duplicate detection (the SKU hash key structurally prevents duplicate rows, which is a property rather than a measurement), no freshness SLA documented in README.md, and no quality metrics emitted from src/resolvers/catalog.ts.",
+      "gap": "Dataset completeness is unmeasured — an agent cannot know whether description is populated for 95% or 40% of SKUs, or whether stale SKUs linger with active: true.",
+      "recommendation": "Emit periodic completeness metrics (percentage of active SKUs with non-null description, count of SKUs not updated in 180 days) to CloudWatch so agent tool descriptions can state known coverage.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "src/resolvers/catalog.ts",
+        "lines": "31-43"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Schema Versioning and API Contracts",
+      "description": "The contract itself is strong: schema/catalog.graphql is schema-first, committed, docstring-annotated on every operation, and introspectable at runtime. The stability machinery is absent: the HTTP API route in infra/template.yaml is a bare /graphql with no /v1/ prefix and no Accept-Version handling in src/server.ts; package.json's \"version\": \"1.2.0\" versions the package, not the API; there is no CHANGELOG, @deprecated is unused in the schema, and no CI exists at all (searched .github/workflows/, .gitlab-ci.yml, Jenkinsfile, buildspec.yml) so there is no graphql-inspector/buf-breaking-class detection and no consumer-driven contract tests.",
+      "gap": "A breaking schema edit (removing a field, tightening nullability) would merge undetected and silently break agent tool bindings.",
+      "recommendation": "Add a CI job running graphql-inspector diff against the previously deployed schema, adopt @deprecated for field retirement, and publish a CHANGELOG entry per schema change.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "schema/catalog.graphql",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Snapshot the introspection result and diff it manually before each release until automation exists.",
+          "Pin agent tool definitions to a committed copy of schema/catalog.graphql so drift is detected at agent build time."
+        ]
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Semantically Meaningful Field Names",
+      "description": "Naming is consistently self-describing. schema/catalog.graphql uses sku, name, description, priceCents, currency, active, updatedAt, nextCursor, items — camelCase, unabbreviated, with no legacy codes requiring a data dictionary. priceCents encodes its unit in the name, removing an ambiguity an LLM would otherwise guess. DynamoDB attribute names in src/resolvers/catalog.ts match the GraphQL field names exactly, so there is no translation layer to misread, and every operation carries a docstring.",
+      "gap": "None — agent tool definitions can be generated from introspection with no field glossary.",
+      "recommendation": "No change required. Preserve the priceCents-style unit-in-name convention for any new numeric field.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 4,
       "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
+        "file": "schema/catalog.graphql",
+        "lines": "7-15"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -631,20 +526,74 @@
       "category_display": "Discovery & Documentation",
       "category_id": "DISC",
       "title": "Data Catalog / Metadata Layer",
-      "description": "No dedicated data catalog or metadata layer. The GraphQL schema provides structural documentation but not semantic data lineage or business glossary.",
-      "gap": "No business glossary or data lineage documentation.",
-      "recommendation": "Add descriptions to all GraphQL schema fields documenting business meaning.",
+      "description": "No dedicated catalog or metadata layer exists — no AWS Glue Data Catalog resource in infra/template.yaml, no DataHub/Collibra/Alation reference, no data dictionary file, and no sensitivity or ownership tags on ProductsTable. The partial substitute is strong: schema/catalog.graphql is a committed, docstring-annotated contract exposed at runtime through GraphQL introspection.",
+      "gap": "Portfolio-level discoverability is missing — nothing outside this repository advertises that this catalog data exists or who owns it.",
+      "recommendation": "Register the schema in a central API/data catalog and add owner and data-sensitivity tags to ProductsTable so portfolio-level agent planning can discover the service.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
-      "phase": 4,
+      "phase": 3,
       "evidence": {
-        "file": "schema/catalog.graphql",
-        "lines": null
+        "file": "infra/template.yaml",
+        "lines": "17-24"
       },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_display": "Observability",
+      "category_id": "OBS",
+      "title": "Distributed Tracing and Structured Logging",
+      "description": "One of the two required controls is present. infra/template.yaml sets Globals.Function.Tracing: Active, enabling AWS X-Ray on CatalogFunction. The structured-logging half is absent: there is not a single log statement in src/server.ts or src/resolvers/catalog.ts — no logger import, no JSON log emission, no request_id/correlation_id field, and no traceparent or X-Ray header propagation in application code — and package.json declares no logging library (no pino, winston, or @aws-lambda-powertools/logger). README.md claims \"structured logs with a request id\", which the code does not support.",
+      "gap": "X-Ray gives request-level timing but no correlated application log lines, so an agent-initiated failure inside a resolver cannot be reconstructed.",
+      "recommendation": "Add @aws-lambda-powertools/logger (or pino) emitting JSON with the Lambda request id and X-Ray trace id on every resolver entry and error, and correct the README claim once implemented.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/resolvers/catalog.ts",
+        "lines": "25-72"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Rely on X-Ray subsegments plus Lambda's default REQUEST ID lines for coarse correlation during the pilot.",
+          "Enable API Gateway access logging with the request id to capture at least the request envelope."
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_display": "Observability",
+      "category_id": "OBS",
+      "title": "Alerting on Error Rates and Latency",
+      "description": "infra/template.yaml declares exactly three resources — ProductsTable, CatalogFunction, CatalogApi — and no AWS::CloudWatch::Alarm of any kind. There are no alarms on Lambda Errors/Throttles/Duration, none on API Gateway 5xx/Latency, no anomaly detectors, no composite alarms, no SNS notification topic, and no PagerDuty/OpsGenie integration anywhere in the repository.",
+      "gap": "Degradation of the exact API an agent consumes would be invisible until someone looks at a dashboard.",
+      "recommendation": "Add CloudWatch alarms to the template for Lambda Errors and p99 Duration, API Gateway 5xx rate, and DynamoDB ThrottledRequests, all wired to an SNS topic.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/template.yaml",
+        "lines": "15-48"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Create alarms out-of-band in the console for the pilot window and backfill them into the template.",
+          "Have the agent orchestration layer alarm on its own tool-call error rate as a proxy signal."
+        ]
       }
     },
     {
@@ -653,20 +602,128 @@
       "category_display": "Observability",
       "category_id": "OBS",
       "title": "Business Outcome Metrics",
-      "description": "No custom business outcome metrics published. Only infrastructure-level metrics via Lambda defaults and X-Ray.",
-      "gap": "No agent-outcome measurement capability.",
-      "recommendation": "Add custom CloudWatch metrics for catalog operations (products_upserted, products_deleted, queries_per_minute).",
+      "description": "Only infrastructure telemetry is configured. Globals.Function.Tracing: Active enables X-Ray and Lambda/API Gateway/DynamoDB publish their standard CloudWatch metrics automatically, but no custom business metric is emitted: there is no PutMetricData call, no embedded-metric-format log line, and no dashboard or business-KPI alarm in the template. README.md's \"CloudWatch metrics\" refers to these default infrastructure metrics.",
+      "gap": "Infrastructure metrics show that mutations succeeded but not whether they produced good outcomes — no signal for SKUs published per run, soft-delete rate, or price-change magnitude, which are what would reveal a misbehaving agent whose calls all return 200.",
+      "recommendation": "Emit EMF metrics from the mutation resolvers for products upserted, products soft-deleted, and absolute price delta, segmented by principal once AUTH-Q6 claim propagation is in place.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
       "evidence": {
         "file": "src/resolvers/catalog.ts",
-        "lines": null
+        "lines": "44-72"
       },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "Infrastructure Governance for Agent-Facing Surface",
+      "description": "Sub-check 1 passes decisively: the entire agent-facing surface is IaC — infra/template.yaml (SAM) defines the HTTP API, the Cognito JWT authorizer, the Lambda execution policy (DynamoDBCrudPolicy scoped to ProductsTable), and the table. Sub-check 2 fails: no CI configuration exists anywhere (searched .github/workflows/, .gitlab-ci.yml, Jenkinsfile, buildspec.yml), so no automated sam validate / cfn-lint / change-set plan review runs before an IaC change, and no CODEOWNERS or branch-protection artifact is committed. Sub-check 3 fails: no AWS Config rules, no drift-detection job, no stack policy.",
+      "gap": "The infrastructure is reproducible but ungoverned — a hand edit in the console or an unreviewed change to the authorizer would be neither caught nor detected afterwards.",
+      "recommendation": "Add a CI workflow running sam validate --lint and producing a change-set plan for review on every PR touching infra/, add CODEOWNERS on that path, and enable scheduled CloudFormation stack drift detection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/template.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Require documented two-person review on infra/template.yaml changes while CI is being built.",
+          "Run aws cloudformation detect-stack-drift on a schedule from an operator workstation until automated."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "CI/CD with API Contract Testing",
+      "description": "No CI/CD pipeline exists. All four conventional locations were searched and are absent: .github/workflows/, .gitlab-ci.yml, Jenkinsfile, buildspec.yml; the repository's complete file set is README.md, package.json, tsconfig.json, infra/template.yaml, schema/catalog.graphql, src/server.ts, src/resolvers/catalog.ts. package.json defines build (tsc), test (vitest run), and lint (eslint src) scripts, but nothing invokes them automatically, and no contract-testing dependency is declared (no Pact, no graphql-inspector, no OpenAPI diff).",
+      "gap": "A schema-breaking change reaches production with no gate — exactly the failure mode that silently breaks agent tool bindings.",
+      "recommendation": "Add a GitHub Actions workflow running tsc, eslint, vitest run, sam validate, and a graphql-inspector diff of schema/catalog.graphql against the deployed schema, failing the build on breaking changes.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "package.json",
+        "lines": "7-11"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Run npm run build && npm run lint locally as a release checklist item with recorded sign-off until CI exists.",
+          "Gate deployment behind a manual introspection diff against the agent's pinned schema copy."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "Rollback Capability",
+      "description": "Only the CloudFormation default remains. CatalogFunction in infra/template.yaml declares no AutoPublishAlias and no DeploymentPreference, so there is no Lambda alias, no versioned traffic shifting, no CodeDeploy canary or linear deployment, and no alarm-triggered automatic rollback (consistent with OBS-Q2, where no alarms exist to trigger one). CatalogApi has no stage-level canary settings, there are no feature flags in src/, and no AppConfig integration. Rollback today means a manual sam deploy of the prior commit, or CloudFormation's automatic rollback of a failed update — which covers failed deployments, not deployments that succeed and then break agent callers.",
+      "gap": "A successful-but-breaking deployment has no fast, automated path back to the last known-good state within the 15–30 minute target.",
+      "recommendation": "Add AutoPublishAlias: live plus DeploymentPreference { Type: Canary10Percent5Minutes, Alarms: [...] } to CatalogFunction, wired to the CloudWatch alarms recommended under OBS-Q2.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/template.yaml",
+        "lines": "26-36"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Tag every deploy with its commit SHA and keep the previous artifact ready so a manual redeploy is a single command.",
+          "Deploy only during supervised windows while an agent is live against the API."
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "API Test Coverage",
+      "description": "The harness is configured but empty. package.json declares vitest ^1.4.0 as a devDependency and a test script (vitest run), yet the repository contains zero test files — no *.test.ts, no *.spec.ts, no test/ or __tests__/ directory anywhere in the tree. tsconfig.json has \"include\": [\"src\"] and src/ holds only server.ts and resolvers/catalog.ts. Consequently nothing validates GraphQL input handling, the requireScope denial path, the base64 cursor round-trip in the products resolver, or the upsert-idempotency property that README.md identifies as the service's core safety argument.",
+      "gap": "No automated test exercises the API contract that agents bind to, and no CI would run them if they existed (ENG-Q2).",
+      "recommendation": "Add vitest suites covering each operation's success path, the forbidden scope-denial path, cursor encode/decode, and an idempotency assertion that two identical upsertProduct calls yield one item; wire vitest run into the ENG-Q2 pipeline.",
+      "severity": "Medium",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "package.json",
+        "lines": "7-11"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Hand-run a set of recorded GraphQL documents against a staging stack before each release.",
+          "Prioritize tests for the two resolvers' authorization and cursor logic, which carry the highest agent-visible risk."
+        ]
       }
     }
   ],
@@ -676,162 +733,154 @@
       "category_id": "API",
       "title": "Documented API Interface",
       "status": "pass",
-      "reason": "GraphQL schema-first interface with documented queries and mutations via schema/catalog.graphql"
+      "reason": "Documented GraphQL interface present: schema/catalog.graphql is the schema-first contract (two queries, two mutations, all docstring-annotated), loaded by src/server.ts into ApolloServer and served at POST /graphql per infra/template.yaml. No direct-database client access, file-based exchange, or RPA automation exists."
     },
     {
       "question_id": "API-Q2",
       "category_id": "API",
       "title": "Machine-Readable API Specification",
       "status": "pass",
-      "reason": "GraphQL schema file serves as machine-readable spec; Apollo Server supports introspection"
+      "reason": "schema/catalog.graphql is a machine-readable GraphQL SDL spec, and because src/server.ts builds the server from that exact file, the spec cannot drift from the implementation. Runtime introspection exposes the same contract to tool generators."
     },
     {
       "question_id": "API-Q4",
       "category_id": "API",
       "title": "Idempotent Write Operations",
       "status": "pass",
-      "reason": "Both mutations are idempotent: upsertProduct uses PutItem by SKU, deleteProduct is a repeatable soft-delete"
-    },
-    {
-      "question_id": "API-Q5",
-      "category_id": "API",
-      "title": "Structured Response Format",
-      "status": "pass",
-      "reason": "GraphQL returns structured JSON responses via Apollo Server"
+      "reason": "Conditional BLOCKER under write-enabled scope, but the control is present: upsertProduct performs a put keyed on sku (the table HASH key per infra/template.yaml), so a retry overwrites rather than duplicating; deleteProduct is an idempotent SET active = :f soft-delete. The business key is the primary key, so no separate idempotency key is required."
     },
     {
       "question_id": "API-Q6",
       "category_id": "API",
       "title": "Asynchronous Operation Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no operations >30s or long-running workflows detected"
+      "reason": "Extended question not triggered. All four operations are single-item DynamoDB calls completing in milliseconds; infra/template.yaml sets Timeout: 30 with no long-running workflow, no Step Functions state machine, and no background job framework in package.json."
     },
     {
       "question_id": "AUTH-Q1",
       "category_id": "AUTH",
       "title": "Machine Identity Authentication",
       "status": "pass",
-      "reason": "Cognito JWT authorizer configured with support for app client credentials (machine identity) and principal attribution via JWT sub claim"
+      "reason": "infra/template.yaml configures CatalogApi with DefaultAuthorizer: CognitoJwt, IdentitySource $request.header.Authorization, a Cognito issuer, and audience [catalog], so every request must present a valid JWT. Cognito app clients support OAuth 2.0 client credentials, giving each agent its own machine identity with client_id attribution, and src/server.ts reads the verified claims at the application boundary."
     },
     {
       "question_id": "AUTH-Q2",
       "category_id": "AUTH",
       "title": "Scoped Permissions (Least Privilege)",
       "status": "pass",
-      "reason": "JWT scopes differentiate access (catalog:write for mutations, any auth for reads); IAM scoped to specific table"
+      "reason": "Scope differentiation exists at both layers: requireScope in src/resolvers/catalog.ts gates mutations on the catalog:write OAuth scope while reads need only authentication, so a read-only agent identity is expressible; and CatalogFunction uses DynamoDBCrudPolicy scoped to ProductsTable on a dedicated role, with no Action: \"*\" or Resource: \"*\" anywhere in infra/template.yaml."
     },
     {
       "question_id": "AUTH-Q3",
       "category_id": "AUTH",
       "title": "Action-Level Authorization",
       "status": "pass",
-      "reason": "Mutations require catalog:write scope; reads require only authentication \u2014 action-level differentiation exists"
+      "reason": "requireScope(ctx, 'catalog:write') is called at the top of both mutations and is absent from product and products, so a principal issued only read scopes can query records but cannot modify or soft-delete them — enforced per operation inside the resolver. Granularity stops at read-vs-write (upsert and delete share one scope), which is a calibration note rather than a failure of the question's criterion."
     },
     {
       "question_id": "AUTH-Q5",
       "category_id": "AUTH",
       "title": "Credential Management",
       "status": "pass",
-      "reason": "No hardcoded credentials; DynamoDB via IAM role; Cognito UserPoolId as CFN parameter"
+      "reason": "No credentials exist in the codebase. Searched source, config, and IaC for password=, secret=, api_key=, and committed .env files — none present. DynamoDB access uses the Lambda execution role's auto-rotated temporary credentials (DynamoDBClient({}) with no explicit credentials); the only environment variable is TABLE (a resource name) and UserPoolId is an identifier parameter. Token verification is delegated to the API Gateway JWT authorizer, so no signing key is held."
     },
     {
       "question_id": "AUTH-Q7",
       "category_id": "AUTH",
       "title": "Agent Identity Suspension",
       "status": "pass",
-      "reason": "Cognito supports disabling individual users/app clients; JWT authorizer rejects tokens from disabled identities"
+      "reason": "Authentication is delegated to a Cognito user pool via the CognitoJwt authorizer, so an individual agent's app client can be deleted or its scopes stripped, and an individual pool user disabled — each revoking exactly one principal while other callers continue. No shared API keys are issued, and audience [catalog] lets this API be cut off independently of other services in the same pool."
     },
     {
       "question_id": "STATE-Q1",
       "category_id": "STATE",
       "title": "Compensation and Rollback",
       "status": "pass",
-      "reason": "Operations are single-step atomic DynamoDB calls with no multi-step workflows. Soft-delete is reversible. PITR enabled."
+      "reason": "Conditional BLOCKER under write-enabled scope, but no multi-step write sequence exists: each mutation performs exactly one item-level-atomic DynamoDB operation keyed by sku, so no saga or two-phase commit is needed. Reversal is available — deleteProduct is a soft-delete that upsertProduct can undo, and ProductsTable has PointInTimeRecoveryEnabled: true."
     },
     {
       "question_id": "STATE-Q2",
       "category_id": "STATE",
       "title": "Queryable Current State",
       "status": "pass",
-      "reason": "Current state fully queryable via product(sku) and products(limit, cursor) queries"
+      "reason": "schema/catalog.graphql exposes product(sku) for point lookups and products(limit, cursor) returning a ProductConnection, with the lifecycle field active and updatedAt on Product, so an agent can read existence and status before deciding to upsert or soft-delete. Both are implemented as genuine reads (db.get, db.scan) — the interface is not write-only or event-only."
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category_id": "STATE",
+      "title": "Circuit Breakers and Resilience",
+      "status": "pass",
+      "reason": "The dependency surface is a single managed service covered by configured timeout plus SDK retry: src/server.ts constructs one DynamoDB client and the repo makes no outbound HTTP calls, AWS SDK v3 applies standard exponential-backoff retry with jitter by default, and infra/template.yaml bounds execution with Timeout: 30. Values are platform defaults rather than explicit configuration — noted as a hardening recommendation, not a finding."
     },
     {
       "question_id": "STATE-Q7",
       "category_id": "STATE",
       "title": "Graceful Degradation Signaling",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no P0 priority specified and critical path not determined"
+      "reason": "Extended question not triggered. No priority was supplied in additionalPlanContext (service is not marked P0) and nothing in the repository indicates critical-path status — README.md states no criticality or SLA, and there is no dependency fan-out placing it on another system's critical path."
     },
     {
       "question_id": "DATA-Q2",
       "category_id": "DATA",
       "title": "Data Residency and Sovereignty",
       "status": "pass",
-      "reason": "Product catalog data (SKU, name, price) is not subject to residency restrictions \u2014 not PII, PHI, or regulated financial data"
+      "reason": "Conditional BLOCKER under write-enabled scope, but the data held is not residency-constrained: ProductsTable stores only product merchandising attributes (no personal data), README.md and the template reference no compliance regime, storage is region-pinned by construction (single-region table, no GlobalTableSpecification, no cross-region replication, Cognito issuer built from ${AWS::Region}), and has_logging_of_user_data is false so no user data escapes into logs."
     },
     {
       "question_id": "DATA-Q3",
       "category_id": "DATA",
       "title": "Selective Query Support",
       "status": "pass",
-      "reason": "Pagination with configurable limit (default 50), cursor-based navigation, and GraphQL field selection"
+      "reason": "products(limit: Int = 50, cursor: String) provides a size bound with a sane default plus real cursor pagination (mapped to DynamoDB Limit and ExclusiveStartKey with nextCursor returned), a server-side FilterExpression restricts results to active products, product(sku) gives direct single-item retrieval, and GraphQL field selection limits payload width. The uncapped maximum for limit is reported under STATE-Q6."
     },
     {
       "question_id": "DATA-Q4",
       "category_id": "DATA",
       "title": "Input Validation and Schema Enforcement",
       "status": "pass",
-      "reason": "GraphQL schema enforces non-null types and input shapes; Apollo Server returns structured validation errors"
+      "reason": "Systematic framework-level validation at the API boundary: graphql ^16.8.0 validates every document against schema/catalog.graphql before any resolver runs, enforcing declared types and non-null constraints on UpsertProductInput, rejecting unknown fields and operations, and returning GRAPHQL_VALIDATION_FAILED errors with the offending field path; Apollo rejects malformed JSON, and tsconfig strict: true keeps resolver signatures aligned. Semantic business-rule validation (non-negative priceCents, ISO-4217 currency, length caps) is absent and recommended, but the threshold for this question is met."
     },
     {
       "question_id": "DATA-Q6",
       "category_id": "DATA",
       "title": "PII Redaction in Logs",
       "status": "pass",
-      "reason": "System handles product catalog data (no PII). No user-identifiable information in data model."
-    },
-    {
-      "question_id": "DISC-Q2",
-      "category_id": "DISC",
-      "title": "Semantically Meaningful Field Names",
-      "status": "pass",
-      "reason": "All field names are human-readable and semantic: sku, name, description, priceCents, currency, active, updatedAt"
+      "reason": "No path exists by which PII can reach logs: src/server.ts and src/resolvers/catalog.ts contain no log statements at all (no request-body logging, no error handler printing request context, no logging dependency in package.json), and the stored data is non-personal product-catalog content. The sole caller-visible error message contains no user data. Protection is incidental rather than engineered, so the OBS-Q1 logger must use a field allowlist when added."
     },
     {
       "question_id": "ENG-Q5",
       "category_id": "ENG",
-      "title": "Encryption at Rest",
+      "title": "Encryption at Rest for Agent-Accessible Data",
       "status": "pass",
-      "reason": "DynamoDB SSESpecification SSEEnabled: true \u2014 server-side encryption enabled"
+      "reason": "The only data store is encrypted at rest: ProductsTable declares SSESpecification { SSEEnabled: true } and PointInTimeRecoveryEnabled: true so backups inherit that encryption. No S3 bucket, RDS instance, or EBS volume exists in the template and the Lambda holds no local state. The key is AWS-owned rather than customer-managed, which is acceptable given DATA-Q1 Stage A = No; switching to SSEType: KMS is recommended if sensitive fields are ever added."
     }
   ],
   "remediation_roadmap": {
     "phases": [
       1,
       2,
-      3,
-      4
+      3
     ],
     "items": [
       {
         "phase": 1,
-        "phase_name": "Blockers and Critical Safety",
+        "phase_name": "Blockers",
         "findings": [
           "AUTH-Q6",
           "STATE-Q3",
-          "STATE-Q4",
           "STATE-Q5",
           "HITL-Q1",
           "HITL-Q2"
         ],
-        "summary": "Resolve the audit logging blocker and address critical safety controls: concurrency, circuit breakers, rate limiting, and human-in-the-loop patterns."
+        "summary": "Close the single deployment BLOCKER (write-path audit attribution with an immutable log store) and the highest-value write-safety controls: optimistic locking on upsert/soft-delete, API throttling plus GraphQL query-cost limits, and a reviewable draft state with an approval gate for agent-proposed catalog changes."
       },
       {
         "phase": 2,
-        "phase_name": "Safety and Quality Foundation",
+        "phase_name": "Safety",
         "findings": [
           "AUTH-Q4",
           "STATE-Q6",
+          "HITL-Q3",
           "API-Q3",
           "DATA-Q5",
           "DISC-Q1",
@@ -839,46 +888,42 @@
           "OBS-Q2",
           "ENG-Q1",
           "ENG-Q2",
-          "ENG-Q3",
-          "HITL-Q3"
+          "ENG-Q3"
         ],
-        "summary": "Address remaining safety risks (identity delegation, blast radius) and establish quality foundation (CI/CD, observability, schema versioning)."
+        "summary": "Complete the safety picture — actor/subject identity separation and per-principal business transaction budgets — then build the engineering substrate agents depend on: structured errors, correlated logging and alerting, a staging environment, CI with schema breaking-change detection, IaC governance, and canary rollback."
       },
       {
         "phase": 3,
-        "phase_name": "Quality Enhancement",
+        "phase_name": "Quality",
         "findings": [
           "ENG-Q4",
           "API-Q7",
           "API-Q8",
-          "OBS-Q3"
-        ],
-        "summary": "Add test coverage, event emission for reactive agents, rate limit headers, and business metrics."
-      },
-      {
-        "phase": 4,
-        "phase_name": "Informational Improvements",
-        "findings": [
           "DATA-Q1",
           "DATA-Q7",
-          "DISC-Q3"
+          "DISC-Q3",
+          "OBS-Q3",
+          "API-Q5",
+          "DISC-Q2"
         ],
-        "summary": "Address informational findings: data classification monitoring, quality metrics, and data catalog documentation."
+        "summary": "Raise agent effectiveness and portfolio discoverability: API test coverage for the agent-facing contract, event emission and rate-limit transparency, data-quality and business-outcome metrics, and catalog registration with ownership and sensitivity tags."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Implement audit logging for all write operations",
+      "action": "Attribute and immutably record every catalog write",
       "question_ids": [
-        "AUTH-Q6"
+        "AUTH-Q6",
+        "AUTH-Q4",
+        "OBS-Q1"
       ],
       "priority": "P0",
       "effort": "Low",
-      "rationale": "Only BLOCKER finding. Add Apollo Server plugin to log principal identity, operation, and target on every mutation. Unblocks agent deployment."
+      "rationale": "The only BLOCKER. The JWT claims needed for attribution are already verified at the API Gateway authorizer and merely discarded in src/server.ts, so propagating sub/client_id and emitting a structured audit record per mutation into an append-only store is a small, self-contained change that unblocks a pilot and simultaneously discharges most of AUTH-Q4 and OBS-Q1."
     },
     {
-      "action": "Add rate limiting and concurrency controls",
+      "action": "Bound the write path: conditional writes plus throttling and query-cost limits",
       "question_ids": [
         "STATE-Q3",
         "STATE-Q5",
@@ -886,30 +931,53 @@
       ],
       "priority": "P1",
       "effort": "Medium",
-      "rationale": "Prevents data corruption from concurrent writes and protects against runaway agent loops. Required for safe write-enabled agent operation."
+      "rationale": "Three of the six RISK-SAFETY findings share one theme — nothing bounds what an agent can do at machine speed. Adding a version attribute with DynamoDB ConditionExpressions, API Gateway DefaultRouteSettings throttling, graphql-depth-limit, and a per-principal mutation budget together convert the write surface from unbounded to bounded."
     },
     {
-      "action": "Establish CI/CD pipeline with schema validation",
+      "action": "Introduce a draft state and an operation-level approval gate",
       "question_ids": [
-        "ENG-Q1",
+        "HITL-Q1",
+        "HITL-Q2"
+      ],
+      "priority": "P1",
+      "effort": "High",
+      "rationale": "Today every agent write is live on commit and no operation can be configured to require human confirmation. Replacing active: Boolean! with a status enum plus a separately-scoped publishProduct mutation gives both HITL controls a single structural foundation and is the prerequisite for expanding agent scope beyond a supervised pilot."
+    },
+    {
+      "action": "Stand up CI with GraphQL breaking-change detection and tests",
+      "question_ids": [
         "ENG-Q2",
-        "ENG-Q3",
+        "ENG-Q1",
+        "ENG-Q4",
         "DISC-Q1"
       ],
       "priority": "P2",
       "effort": "Medium",
-      "rationale": "Prevents undetected breaking changes to the GraphQL schema that would silently break agent tool bindings."
+      "rationale": "No pipeline exists, so the build, lint, and vitest scripts already in package.json never run and no schema diff guards the contract agents bind to. One workflow running tsc, eslint, vitest, sam validate --lint, and graphql-inspector diff closes four RISK-QUALITY findings at once."
     },
     {
-      "action": "Add structured logging and alerting",
+      "action": "Make the agent-facing API observable and reversible",
       "question_ids": [
-        "OBS-Q1",
-        "OBS-Q2"
+        "OBS-Q2",
+        "ENG-Q3",
+        "API-Q3"
       ],
       "priority": "P2",
-      "effort": "Low",
-      "rationale": "Enables debugging of agent-initiated request failures and alerting on service degradation."
+      "effort": "Medium",
+      "rationale": "The template declares zero alarms and the function has no alias or deployment preference, so degradation is undetected and a successful-but-breaking deploy has no automated way back. Adding alarms first enables an alarm-triggered canary rollback, and structured error codes let agents distinguish retriable from terminal failures."
+    },
+    {
+      "action": "Custom Transformation",
+      "question_ids": [
+        "AUTH-Q6",
+        "STATE-Q3",
+        "STATE-Q5",
+        "HITL-Q1",
+        "ENG-Q2"
+      ],
+      "priority": "P1",
+      "effort": "Medium",
+      "rationale": "A scoped AWS Transform custom transformation can apply the repeatable portions of this remediation — audit-logging instrumentation, conditional-write conversion, SAM throttling and canary deployment settings, and CI workflow scaffolding — across this and sibling serverless GraphQL services in the portfolio."
     }
-  ],
-  "analysis_type": "ara"
+  ]
 }

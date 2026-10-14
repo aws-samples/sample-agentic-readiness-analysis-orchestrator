@@ -25,7 +25,7 @@ The transformation follows a 9-step pipeline:
 6. **Cross-Cutting RISKs** (Step 4b): Identify RISKs meeting the scaling threshold (max(3, 33% of applicable repos)), split by RISK-SAFETY and RISK-QUALITY tiers
 7. **Dependency Mapping** (Step 5): Construct service dependency map from dependency_overrides
 8. **Remediation Guidance** (Step 6): Generate portfolio-level remediation for cross-cutting BLOCKERs
-9. **Agentic Programs** (Step 7): Recommend AI DLC, AXE, Innovation EBA where triggered
+9. **Agentic Programs** (Step 7): Recommend AI DLC, AXE, Innovation EBA, FORGE where triggered
 10. **Portfolio-Level Questions** (Step 8): Evaluate PORT-ARA-Q1 through PORT-ARA-Q5 — capabilities only visible across multiple repos
 11. **Deterministic Output Validation** (Step 9): Verify and correct all arithmetic in the generated report against source JSONs before writing final artifacts
 
@@ -43,7 +43,7 @@ The MD report contains:
 - Cross-cutting RISKs (same risk question appearing in max(3, 33% of applicable repos))
 - Service dependency map from dependency_overrides
 - Portfolio-level remediation guidance for cross-cutting blockers
-- Agentic program recommendations (AI DLC, AXE, Innovation EBA)
+- Agentic program recommendations (AI DLC, AXE, Innovation EBA, FORGE)
 - Service-by-service summary (repo name, profile, blocker count, risk count)
 
 This portfolio TD focuses exclusively on cross-cutting BLOCKER/RISK identification across multiple ARA reports. It does not include modernization pathways, roadmap phases, numeric scores, technology preferences, or resource allocation recommendations.
@@ -620,6 +620,7 @@ When multiple programs are triggered, recommend them in this order:
 1. **AI DLC** (if triggered) — Run first to establish AI-driven development practices before agentic work
 2. **AXE** (if triggered) — Run after AI DLC to design the agent experience
 3. **Innovation EBA** (if triggered) — Run when the customer is ready to accelerate an AI/ML or GenAI use case into production (can run in parallel with AXE if use cases are independent)
+4. **FORGE** (if triggered) — Run after initial triage; its data-platform roadmap feeds AXE's data architecture phase
 
 If only one program is triggered, recommend it directly without sequencing context.
 
@@ -627,7 +628,7 @@ If only one program is triggered, recommend it directly without sequencing conte
 
 For each triggered program:
 
-- **Program name** — AI DLC, AXE, or Innovation EBA
+- **Program name** — AI DLC, AXE, Innovation EBA, or FORGE
 - **Relevance** — Why this program is recommended based on portfolio findings
 - **Trigger findings** — Specific portfolio metrics that triggered the recommendation
 - **What it provides** — Brief description of the program's value

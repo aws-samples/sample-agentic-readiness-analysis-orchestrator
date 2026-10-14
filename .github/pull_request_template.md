@@ -21,13 +21,13 @@
 
 - [ ] Rubric / TD change (a question, severity, pathway, program, threshold)
 - [ ] Change-impact harness / CI
-- [ ] Orchestrator (`orchestrator/SKILL.md` / references)
+- [ ] Orchestrator (`advisor/SKILL.md` / references)
 - [ ] Documentation / examples
 - [ ] Other
 
 ## Checklist
 
-- [ ] I read the relevant part of [`docs/contributing/README.md`](docs/contributing/README.md) if this touches a rubric.
+- [ ] I read the relevant part of [`docs/contributing/README.md`](../docs/contributing/README.md) if this touches a rubric.
 - [ ] Local tests pass: `python3 -m pytest harness/tests/ -q`.
 - [ ] **Add/remove a question?** I updated the one count literal (43 / 37) in `harness/tests/test_skill_table.py` in this PR, and left question IDs permanent (no renumbering to close a gap).
 - [ ] **Rubric change?** I updated the benchmarking scorer prompts (`harness/rubric/ara-scorer-prompt.md` / `mod-scorer-prompt.md`) if the change affects them.
